@@ -42,7 +42,7 @@ static void StartHostReceive(void)
     (void)HAL_UARTEx_ReceiveToIdle_IT(&huart1, host_rx, sizeof(host_rx));
 }
 
-/* 位 0~3 分别写到四组电磁阀驱动输出；每组外部连接两个对称电磁阀。 */
+/* 偶数位驱动左侧喷嘴，奇数位驱动右侧喷嘴；位序为 L1、R1 至 L4、R4。 */
 static void WriteValveOutputs(uint8_t mask)
 {
     HAL_GPIO_WritePin(VALVE_G1_GPIO_Port, VALVE_G1_Pin,

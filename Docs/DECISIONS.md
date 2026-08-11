@@ -10,3 +10,5 @@
 | 2026-08-12 | Use an explicit eight-bit nozzle mask for protocol v2, with controller readback authoritative. | Individual nozzles, side masters, presets and custom patterns require one unambiguous confirmed state. |
 | 2026-08-12 | Store calibration, PWM lower bound and safety minimum locally with atomic persistence. | The ten-point calibration is host configuration, not STM32 Flash data. |
 | 2026-08-12 | Fix PWM upper limit at 80 percent pending thermal validation. | Hardware safety evidence is required before changing that limit. |
+| 2026-08-12 | Allocate protocol-v2 holding register 0x000C and capabilities 0x010A..0x010B. | Explicit eight-nozzle commands and version/feature negotiation must be unambiguous while retaining legacy modes. |
+| 2026-08-12 | Use Flash schema v4 while decoding schema v3. | The existing 24-byte record retains its layout and CRC coverage; reserved byte 19 now persists the effective nozzle mask. |

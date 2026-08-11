@@ -13,7 +13,7 @@ Do not modify, move, rename, or delete these baselines. Editable copies will be 
 
 ## Current phase
 
-Task 1 baseline is complete: the two immutable external baselines were copied to Source/, verified against SHA-256 manifests, tested, and committed locally. Product behavior, UI, protocol allocation, and firmware logic have not yet been changed from that verified copy.
+Task 3 firmware protocol work is complete in the local task commit: copied STM32 firmware now exposes protocol v2 explicit eight-nozzle control at 0x000C, capability registers 0x010A..0x010B, schema-v3/v4 compatible configuration decoding, and firmware version 0x0202. Desktop protocol/client integration remains Task 4.
 
 ## Baseline checkpoint and migration
 
@@ -45,3 +45,4 @@ Read `Docs/superpowers/specs/2026-08-12-sprayer-touch-hmi-design.md` before plan
 - Do not claim STM32 build success unless a fresh compiler-backed build ran successfully.
 - Controller feedback, not optimistic UI state, is authoritative for nozzle and PWM status.
 - Never store credentials in this project.
+- Task 3 verification is recorded in Docs/superpowers/sdd/task-3-report.md: native MSVC CTest, both existing firmware PowerShell tests, and a fresh compiler-backed ARM Release build completed without flashing hardware.

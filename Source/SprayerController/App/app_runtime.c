@@ -14,7 +14,7 @@ void AppRuntime_Init(AppRuntime *r,uint8_t host_addr,uint8_t current_addr)
 {
     HostRegisters_Init(&r->host); PwmEngine_Init(&r->pwm); CurrentModule_Init(&r->current_module,current_addr);
     r->host_slave_address=host_addr; r->host_activity_level=false; r->communication_ticks=0U; r->last_output_mask=0U;
-    r->host.status.firmware_version=0x0201U; ApplyTargets(r); AppRuntime_RefreshStatus(r);
+    r->host.status.firmware_version=0x0202U; ApplyTargets(r); AppRuntime_RefreshStatus(r);
 }
 
 void AppRuntime_LoadConfig(AppRuntime *r,const ControllerConfig *c)
@@ -25,7 +25,7 @@ uint8_t AppRuntime_Tick500us(AppRuntime *r)
     const uint8_t calculated=PwmEngine_Tick500us(&r->pwm);
     if(r->communication_ticks<COMMUNICATION_TIMEOUT_TICKS)r->communication_ticks++;
     if(r->communication_ticks>=COMMUNICATION_TIMEOUT_TICKS)r->host.status.communication_stopped=1U;
-    r->last_output_mask=(r->host.pwm_enabled && r->host.config.mode!=SPRAY_ALL_OFF)?calculated:0U;
+    r->last_output_mask=r->host.pwm_enabled?calculated:0U;
     AppRuntime_RefreshStatus(r); return r->last_output_mask;
 }
 

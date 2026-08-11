@@ -19,9 +19,12 @@
 - .NET SDK 8 for desktop build/test
 - CMake, Ninja and arm-none-eabi-gcc for firmware configure/build
 - STM32 hardware/programmer only for separately authorized hardware acceptance; this task did not flash hardware
+- Visual Studio Build Tools (MSVC) for portable native firmware tests; enter `VsDevCmd.bat` only for the host-test configure/build command.
 
 ## Verification before handoff
 
 Run the commands in Docs/PROGRESS.md, record exact outputs in that milestone's progress/report file, and do not claim firmware success without a fresh compiler-backed build. Pair release desktop and firmware artifacts by version and checksum.
+
+For Task 3, run the two existing firmware checks with `powershell.exe -File`, then run the native CTest command and `cmake --fresh --preset Release` / `cmake --build --preset Release --target clean` / `cmake --build --preset Release` from `Source/SprayerController`. The fresh configure/build is compiler-only verification; do not invoke the separately defined `flash` target without explicit hardware authorization.
 
 When recreating a baseline, first run Tools/tests/Initialize-SourceCopies.Tests.ps1. The copy script intentionally rejects any baseline/project/destination overlap, including a path that resolves into a baseline through a junction or other reparse point.

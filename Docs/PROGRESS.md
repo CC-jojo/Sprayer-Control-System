@@ -8,17 +8,18 @@
 - A copied-firmware Release CMake build completed. No hardware was flashed.
 - Copy initialization was security-reviewed and hardened: canonical reparse-aware path overlap checks run before any directory creation, manifests use ordinal relative-path ordering and ordinal exact comparison, and all manifest-listed source files are Git-tracked.
 - Focused PowerShell safety/determinism tests are available at Tools/tests/Initialize-SourceCopies.Tests.ps1.
+- Task 3 added firmware protocol v2: 0x000C writes an explicit eight-bit nozzle mask, 0x010A..0x010B advertise version 2 and feature bit 0x0001, and firmware version is 0x0202.
+- Task 3 preserves legacy mode masks and existing register behavior, adds Flash schema v4 while decoding schema v3, and keeps 0x0108 as physical PWM-gated output readback.
 
 ## Current
 
-The project is at a clean, committed baseline. No product behavior, UI, protocol register allocation, or firmware logic has yet been changed from the copied baseline.
+Firmware protocol v2 is ready for Task 4 desktop capability detection and explicit-mask client work. Hardware flashing and physical-output acceptance have not been performed.
 
 ## Next
 
-1. Add focused tests for eight-bit masks, side masters, canopy presets and custom patterns before behavior changes.
-2. Specify and test the protocol-v2 register/feature negotiation while retaining baseline compatibility.
-3. Introduce host-local calibration validation, atomic persistence and return-valve mapping.
-4. Implement the responsive WPF dashboard and settings views with controller-confirmed state transitions.
+1. Implement desktop capability detection, 0x000C writes, and status-confirmed explicit-mask state.
+2. Introduce host-local calibration validation, atomic persistence and return-valve mapping.
+3. Implement the responsive WPF dashboard and settings views with controller-confirmed state transitions.
 
 ## Verification commands
 
@@ -31,9 +32,18 @@ The initialization command below is for a fresh bootstrap or deliberate recreati
 ### Existing completed repository
 
     dotnet test Source/SprayerDesktop/SprayerControl.sln --configuration Release
-    pwsh -File Source/SprayerController/tools/tests/test-stm32-download-output.ps1
-    pwsh -File Source/SprayerController/tools/tests/test-stm32-download-retry.ps1
-    cmake --preset Release
+    powershell.exe -NoProfile -ExecutionPolicy Bypass -File Source/SprayerController/tools/tests/test-stm32-download-output.ps1
+    powershell.exe -NoProfile -ExecutionPolicy Bypass -File Source/SprayerController/tools/tests/test-stm32-download-retry.ps1
+    cmake --fresh --preset Release
+    cmake --build --preset Release --target clean
     cmake --build --preset Release
+
+### Task 3 evidence (no hardware flashing)
+
+    cmd.exe /d /s /c "call \"C:\Program Files (x86)\Microsoft Visual Studio\18\BuildTools\Common7\Tools\VsDevCmd.bat\" -arch=x64 && cmake -S .\Source\SprayerController\Tests -B .\Temp\firmware-host-tests -G Ninja && cmake --build .\Temp\firmware-host-tests --config Release && ctest --test-dir .\Temp\firmware-host-tests -C Release --output-on-failure"
+
+- Native MSVC CTest: 2/2 passed; strict `/W4 /WX /utf-8` was used.
+- Existing firmware PowerShell tests: 2/2 passed.
+- Fresh ARM Release build: GNU Arm Embedded Toolchain 13.3.1, 35/35 Ninja steps completed; RAM 2072 B/20 KB and Flash 10540 B/63 KB. No `flash` target was invoked.
 
 The initialization script intentionally refuses non-empty Source/SprayerDesktop or Source/SprayerController destinations.
