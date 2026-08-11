@@ -1,0 +1,7 @@
+<component name="ProjectRunConfigurationManager">
+  <configuration default="false" name="STM32 Download" type="CMakeRunConfiguration" factoryName="Application" PROGRAM_PARAMS="-NoProfile -ExecutionPolicy Bypass -File &quot;$PROJECT_DIR$/tools/stm32-download.ps1&quot; -Programmer &quot;E:\APP\STM32CubeCLT\STM32CubeCLT_1.18.0\STM32CubeProgrammer\bin\STM32_Programmer_CLI.exe&quot; -Firmware &quot;$PROJECT_DIR$/build/Debug/SprayerController.elf&quot;" REDIRECT_INPUT="false" ELEVATE="false" USE_EXTERNAL_CONSOLE="false" EMULATE_TERMINAL="false" WORKING_DIR="file://$PROJECT_DIR$/build/Debug" PASS_PARENT_ENVS_2="true" PROJECT_NAME="SprayerController" TARGET_NAME="SprayerController" CONFIG_NAME="Debug - Debug" RUN_PATH="C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe">
+    <method v="2">
+      <option name="com.jetbrains.cidr.execution.CidrBuildBeforeRunTaskProvider$BuildBeforeRunTask" enabled="true" />
+    </method>
+  </configuration>
+</component>

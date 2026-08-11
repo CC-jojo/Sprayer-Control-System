@@ -1,0 +1,16 @@
+# Generated desktop and firmware build outputs
+**/bin/
+**/obj/
+**/build/
+**/cmake-build-*/
+
+# Local scratch output and user state
+Temp/
+**/.vs/
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+
+# Local Superpowers working state (durable task records under Docs remain tracked)
+.superpowers/sdd/progress.md
