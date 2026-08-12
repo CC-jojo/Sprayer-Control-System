@@ -1,4 +1,5 @@
 using System.Runtime.CompilerServices;
+using System.IO;
 using SprayerControl.App.Services;
 using SprayerControl.Core;
 
@@ -6,6 +7,7 @@ namespace SprayerControl.App.ViewModels;
 
 public sealed class DashboardViewModel : ObservableObject
 {
+    private const string MissingCalibrationMessage = "比例阀尚未完成标定，请先在设置中完成十点标定";
     private static readonly ConditionalWeakTable<IControllerSession, SemaphoreSlim> SessionOperationGates = new();
     private readonly IControllerSession _session;
     private readonly LogViewModel _log;
@@ -21,6 +23,7 @@ public sealed class DashboardViewModel : ObservableObject
     private bool _isNozzleCommandPending;
     private bool _isSetpointCommandPending;
     private string _errorText = string.Empty;
+    private bool _hasCommunicationFault;
     private bool _setpointInputInvalid;
 
     public DashboardViewModel(IControllerSession session, HostConfiguration? configuration, LogViewModel log)
@@ -33,6 +36,8 @@ public sealed class DashboardViewModel : ObservableObject
         _previewDuty = _confirmedDuty;
         _confirmedReturnOpening = configuration?.ReturnValveSafetyMinimum ?? 10;
         _previewReturnOpening = _confirmedReturnOpening;
+        if (configuration is null)
+            _errorText = MissingCalibrationMessage;
         RefreshCommand = new AsyncCommand(RefreshAsync, ReportException);
         CommitDutyCommand = new AsyncCommand(CommitDutyAsync, ReportException);
         CommitReturnOpeningCommand = new AsyncCommand(CommitReturnOpeningAsync, ReportException);
@@ -108,11 +113,21 @@ public sealed class DashboardViewModel : ObservableObject
         private set => SetProperty(ref _errorText, value);
     }
 
+    public bool HasCommunicationFault
+    {
+        get => _hasCommunicationFault;
+        private set => SetProperty(ref _hasCommunicationFault, value);
+    }
+
     public LogViewModel Log => _log;
 
     public void UpdateConfiguration(HostConfiguration? configuration)
     {
         _configuration = configuration;
+        if (configuration is null)
+            ErrorText = MissingCalibrationMessage;
+        else if (ErrorText == MissingCalibrationMessage)
+            ErrorText = string.Empty;
         if (configuration is not null && _previewReturnOpening < configuration.ReturnValveSafetyMinimum)
         {
             SetPreviewReturnOpeningValue(configuration.ReturnValveSafetyMinimum);
@@ -120,9 +135,26 @@ public sealed class DashboardViewModel : ObservableObject
         }
 
         OnPropertyChanged(nameof(CanCommitSetpoints));
+        OnPropertyChanged(nameof(PwmDutyMinimum));
+        OnPropertyChanged(nameof(SafetyMinimum));
+        OnPropertyChanged(nameof(PreviewMappedCurrentMilliamps));
     }
 
     public bool CanCommitSetpoints => _configuration is not null;
+
+    public int PwmDutyMinimum => _configuration?.PwmDutyMinimum ?? 30;
+
+    public double SafetyMinimum => _configuration?.ReturnValveSafetyMinimum ?? 100;
+
+    public double? PreviewMappedCurrentMilliamps
+    {
+        get
+        {
+            if (_configuration is null) return null;
+            try { return _configuration.ReturnValveCalibration.CurrentMilliampsAt(PreviewReturnOpening, _configuration.ReturnValveSafetyMinimum); }
+            catch (Exception) { return null; }
+        }
+    }
 
     public async Task RefreshAsync(CancellationToken cancellationToken = default)
     {
@@ -132,7 +164,8 @@ public sealed class DashboardViewModel : ObservableObject
             try
             {
                 await RefreshFromControllerAsync(cancellationToken);
-                ErrorText = string.Empty;
+                HasCommunicationFault = false;
+                RestoreLocalStatusMessage();
             }
             finally
             {
@@ -173,7 +206,7 @@ public sealed class DashboardViewModel : ObservableObject
     {
         if (_configuration is null)
         {
-            RejectSetpointInput("Return-valve calibration configuration is required before changing setpoints.");
+            RejectSetpointInput(MissingCalibrationMessage);
             return;
         }
 
@@ -192,7 +225,7 @@ public sealed class DashboardViewModel : ObservableObject
     {
         if (_configuration is null)
         {
-            RejectSetpointInput("Return-valve calibration configuration is required before changing setpoints.");
+            RejectSetpointInput(MissingCalibrationMessage);
             return;
         }
 
@@ -228,7 +261,7 @@ public sealed class DashboardViewModel : ObservableObject
         {
             await _operationGate.WaitAsync(cancellationToken);
             IsNozzleCommandPending = true;
-            ErrorText = string.Empty;
+            RestoreLocalStatusMessage();
             try
             {
                 NozzleMask target = deriveTarget(ConfirmedMask);
@@ -269,7 +302,7 @@ public sealed class DashboardViewModel : ObservableObject
                 priorOpening = ConfirmedReturnOpening;
                 if (configuration is null)
                 {
-                    RejectSetpointInput("Return-valve calibration configuration is required before committing setpoints.");
+                    RejectSetpointInput(MissingCalibrationMessage);
                     return;
                 }
 
@@ -318,7 +351,7 @@ public sealed class DashboardViewModel : ObservableObject
         {
             await _operationGate.WaitAsync(cancellationToken);
             IsSetpointCommandPending = true;
-            ErrorText = string.Empty;
+            RestoreLocalStatusMessage();
             try
             {
                 await operation(cancellationToken);
@@ -361,12 +394,21 @@ public sealed class DashboardViewModel : ObservableObject
 
     private void ReportException(Exception exception)
     {
+        HasCommunicationFault = exception is IOException or TimeoutException or ModbusProtocolException or ObjectDisposedException;
         ErrorText = exception.Message;
         _log.Add(exception.Message);
     }
 
+    private void RestoreLocalStatusMessage() => ErrorText = _configuration is null ? MissingCalibrationMessage : string.Empty;
+
     private void SetPreviewDutyValue(int value) => SetProperty(ref _previewDuty, value, nameof(PreviewDuty));
 
     private void SetPreviewReturnOpeningValue(double value) =>
-        SetProperty(ref _previewReturnOpening, value, nameof(PreviewReturnOpening));
+        SetPreviewReturnOpeningAndNotify(value);
+
+    private void SetPreviewReturnOpeningAndNotify(double value)
+    {
+        if (SetProperty(ref _previewReturnOpening, value, nameof(PreviewReturnOpening)))
+            OnPropertyChanged(nameof(PreviewMappedCurrentMilliamps));
+    }
 }

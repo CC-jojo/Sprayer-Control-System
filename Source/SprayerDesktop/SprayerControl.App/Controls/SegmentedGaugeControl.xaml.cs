@@ -9,7 +9,7 @@ namespace SprayerControl.App.Controls;
 
 public partial class SegmentedGaugeControl : UserControl
 {
-    private const int SegmentCount = 20;
+    private const int SegmentCount = 13;
     private bool _gestureActive;
     private bool _gestureCancelled;
 
@@ -94,7 +94,7 @@ public partial class SegmentedGaugeControl : UserControl
 
     private void OnMouseLeftButtonDown(object sender, MouseButtonEventArgs e)
     {
-        if (e.StylusDevice is not null || IsPending)
+        if (e.StylusDevice is not null || IsPending || !IsEnabled)
         {
             return;
         }
@@ -133,7 +133,7 @@ public partial class SegmentedGaugeControl : UserControl
 
     private void OnTouchDown(object sender, TouchEventArgs e)
     {
-        if (IsPending)
+        if (IsPending || !IsEnabled)
         {
             return;
         }
@@ -154,7 +154,7 @@ public partial class SegmentedGaugeControl : UserControl
 
     private void OnTouchUp(object sender, TouchEventArgs e)
     {
-        if (IsPending)
+        if (IsPending || !IsEnabled)
         {
             CancelGesture();
         }
@@ -182,25 +182,21 @@ public partial class SegmentedGaugeControl : UserControl
 
     private void UpdatePreviewFrom(Point position)
     {
-        if (IsPending || ActualWidth <= 0 || ActualHeight <= 0)
+        if (IsPending || !IsEnabled || ActualWidth <= 0 || ActualHeight <= 0)
         {
             return;
         }
 
         double x = position.X - ActualWidth / 2d;
         double y = position.Y - ActualHeight / 2d;
-        double angle = Math.Atan2(x, -y);
-        if (angle < 0)
-        {
-            angle += Math.PI * 2d;
-        }
-
-        PreviewValue = Minimum + (angle / (Math.PI * 2d) * (Maximum - Minimum));
+        double angle = Math.Atan2(x, -y) * 180d / Math.PI;
+        double clampedAngle = Math.Clamp(angle, -120d, 120d);
+        PreviewValue = Minimum + ((clampedAngle + 120d) / 240d * (Maximum - Minimum));
     }
 
     private void CompleteGesture()
     {
-        if (IsPending || !_gestureActive)
+        if (IsPending || !IsEnabled || !_gestureActive)
         {
             return;
         }

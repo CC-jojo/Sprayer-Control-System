@@ -13,5 +13,11 @@ public interface IControllerSession : IAsyncDisposable
         ushort duty,
         ushort targetCurrentMicroamps,
         CancellationToken cancellationToken = default);
+    Task SavePowerOnDefaultsAsync(
+        NozzleMask mask,
+        ushort duty,
+        ushort targetCurrentMicroamps,
+        CancellationToken cancellationToken = default) =>
+        Task.FromException(new NotSupportedException("This session cannot save controller power-on defaults."));
     Task<ControllerStatus> ReadStatusAsync(CancellationToken cancellationToken = default);
 }

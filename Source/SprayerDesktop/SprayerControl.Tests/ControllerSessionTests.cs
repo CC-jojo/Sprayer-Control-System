@@ -62,6 +62,26 @@ public sealed class ControllerSessionTests
     }
 
     [Fact]
+    public async Task PowerOnDefaultUsesCustomPersistentSettingsThenMaskThenSafetyKey()
+    {
+        var channel = new SessionChannel { CapabilityResponse = ModbusRtuCodec.WithCrc([0x01, 0x03, 0x04, 0x00, 0x02, 0x00, 0x01]) };
+        await using ModbusControllerSession session = await ModbusControllerSession.CreateAsync(new ControllerClient(channel));
+
+        await session.SavePowerOnDefaultsAsync(new NozzleMask(0xF0), 60, 7800);
+
+        Assert.Equal(["10:0000", "06:000C", "06:000A"], channel.Writes);
+    }
+
+    [Fact]
+    public async Task DemoSessionHardBlocksPowerOnDefaultPersistence()
+    {
+        await using var session = new DemoControllerSession(delayAsync: static (_, _) => Task.CompletedTask);
+        NotSupportedException error = await Assert.ThrowsAsync<NotSupportedException>(() =>
+            session.SavePowerOnDefaultsAsync(new NozzleMask(0xF0), 60, 7800));
+        Assert.Contains("演示模式", error.Message);
+    }
+
+    [Fact]
     public async Task ModbusSessionCreationDisposesOwnedLifetimeAndPropagatesProtocolFailure()
     {
         var owned = new CountingDisposable();
@@ -225,6 +245,7 @@ public sealed class ControllerSessionTests
         public byte[] CapabilityResponse { get; init; } = [];
         public int CapabilityReads { get; private set; }
         public List<byte> MaskWrites { get; } = [];
+        public List<string> Writes { get; } = [];
 
         public Task<byte[]> TransceiveAsync(byte[] request, int responseLength, CancellationToken cancellationToken = default)
         {
@@ -237,6 +258,8 @@ public sealed class ControllerSessionTests
 
             if (request[1] == 0x06 && request[2] == 0x00 && request[3] == 0x0C)
                 MaskWrites.Add(request[5]);
+            if (request[1] is 0x06 or 0x10)
+                Writes.Add($"{request[1]:X2}:{request[2]:X2}{request[3]:X2}");
 
             if (request[1] == 0x03)
             {

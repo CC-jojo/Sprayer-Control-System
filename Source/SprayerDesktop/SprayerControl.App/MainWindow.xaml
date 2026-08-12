@@ -1,19 +1,26 @@
-<Window x:Class="SprayerControl.App.MainWindow" xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" Title="施药机控制系统" Height="820" Width="920" MinHeight="700" MinWidth="780" Background="#F4F4F4">
- <Window.Resources><Style TargetType="GroupBox"><Setter Property="Margin" Value="0,0,0,12"/><Setter Property="Padding" Value="12"/></Style><Style TargetType="Button"><Setter Property="Padding" Value="16,7"/><Setter Property="Margin" Value="4"/></Style><Style TargetType="TextBox"><Setter Property="Width" Value="75"/><Setter Property="Margin" Value="6,3"/></Style></Window.Resources>
- <ScrollViewer VerticalScrollBarVisibility="Auto"><StackPanel Margin="20">
-  <TextBlock Text="施药机控制系统" FontSize="25" FontWeight="Bold" Margin="0,0,0,16"/>
-  <GroupBox Header="控制器连接"><TextBlock x:Name="ConnectionText" Text="正在自动查找控制器……" FontWeight="SemiBold"/></GroupBox>
-  <Border x:Name="CommunicationResultBorder" Background="#EEEEEE" BorderBrush="#999" BorderThickness="1" Padding="10" Margin="0,0,0,12"><StackPanel><TextBlock x:Name="CommunicationResultText" Text="尚未发送指令" FontWeight="Bold" TextWrapping="Wrap"/><TextBlock x:Name="CommunicationCountersText" Text="成功 0 次；失败 0 次" Margin="0,4,0,0"/></StackPanel></Border>
-  <GroupBox x:Name="PwmGroup" IsEnabled="False" Header="8路喷头双层移相PWM（10 Hz）"><StackPanel>
-   <CheckBox x:Name="PwmMasterSwitch" Content="PWM总开关（上电默认开启）" FontWeight="Bold" Margin="0,2,0,10" Click="PwmMasterSwitch_Click"/>
-   <TextBlock Text="喷头工作模式" FontWeight="SemiBold" Margin="0,0,0,5"/>
-   <WrapPanel><RadioButton x:Name="ModeOff" Content="全关" IsChecked="True" Margin="0,4,18,8"/><RadioButton x:Name="Mode4" Content="仅第4组" Margin="0,4,18,8"/><RadioButton x:Name="Mode34" Content="第3+4组" Margin="0,4,18,8"/><RadioButton x:Name="Mode234" Content="第2+3+4组" Margin="0,4,18,8"/><RadioButton x:Name="ModeAll" Content="四组全开" Margin="0,4,0,8"/></WrapPanel>
-   <WrapPanel><TextBlock Text="统一占空比（30%–80%）" VerticalAlignment="Center"/><TextBox x:Name="DutyText" Text="30"/></WrapPanel>
-   <TextBlock Text="通道：左1 PB0、右1 PA0、左2 PB1、右2 PA1、左3 PB10、右3 PA4、左4 PB11、右4 PA5" Foreground="#444" TextWrapping="Wrap" Margin="0,7,0,0"/>
-  </StackPanel></GroupBox>
-  <GroupBox x:Name="ReturnValveGroup" IsEnabled="False" Header="回流比例阀"><StackPanel Orientation="Horizontal"><TextBlock Text="目标电流 mA" VerticalAlignment="Center"/><TextBox x:Name="TargetCurrent" Text="0.000"/><TextBlock Text="允许范围：0.000–20.000 mA" VerticalAlignment="Center" Margin="15,0"/></StackPanel></GroupBox>
-  <StackPanel x:Name="CommandButtons" IsEnabled="False" Orientation="Horizontal" HorizontalAlignment="Center"><Button Content="应用参数" Click="Apply_Click"/><Button Content="读取状态" Click="ReadStatus_Click"/><Button Content="保存为上电默认值" Click="Save_Click"/></StackPanel>
-  <Border BorderBrush="#777" BorderThickness="1" Padding="12" Margin="0,10"><TextBlock x:Name="StatusText" Text="等待连接控制器。" TextWrapping="Wrap"/></Border>
-  <GroupBox Header="通信端口日志"><DockPanel><Button Content="清空日志" Click="ClearLog_Click" DockPanel.Dock="Top" HorizontalAlignment="Right"/><ListBox x:Name="OperationLogList" Height="180" FontFamily="Consolas" HorizontalContentAlignment="Stretch"/></DockPanel></GroupBox>
- </StackPanel></ScrollViewer>
+<Window x:Class="SprayerControl.App.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:views="clr-namespace:SprayerControl.App.Views"
+        Title="施药机控制系统" WindowStyle="None" WindowState="Maximized"
+        Background="{DynamicResource HmiBackgroundBrush}" MinWidth="640" MinHeight="480">
+    <Grid Background="{DynamicResource HmiBackgroundBrush}">
+        <Grid.RowDefinitions><RowDefinition Height="64" /><RowDefinition Height="*" /></Grid.RowDefinitions>
+        <Border Background="{DynamicResource HmiBackgroundBrush}" BorderBrush="{DynamicResource HmiBorderBrush}" BorderThickness="0,0,0,1" Padding="20,0">
+            <DockPanel LastChildFill="False">
+                <TextBlock Text="施药机控制系统" Style="{StaticResource HmiHeadingStyle}" FontSize="27" VerticalAlignment="Center" DockPanel.Dock="Left" />
+                <StackPanel Orientation="Horizontal" VerticalAlignment="Center" DockPanel.Dock="Right">
+                    <Ellipse x:Name="HeaderConnectionDot" Width="15" Height="15" Fill="{DynamicResource HmiAmberBrush}" Margin="0,0,8,0" />
+                    <TextBlock x:Name="ConnectionText" Text="正在自动查找控制器" Foreground="{DynamicResource HmiGreenBrush}" FontSize="17" VerticalAlignment="Center" Margin="0,0,24,0" />
+                    <Border Width="1" Height="34" Background="{DynamicResource HmiBorderBrush}" Margin="0,0,18,0"/>
+                    <Button Content="⚙  设置" FontSize="17" Style="{StaticResource TouchButtonStyle}" MinWidth="104" MinHeight="48" Click="ShowSettings_Click" />
+                </StackPanel>
+            </DockPanel>
+        </Border>
+        <Grid Grid.Row="1">
+            <views:DashboardView x:Name="Dashboard" />
+            <views:SettingsView x:Name="Settings" Visibility="Collapsed" />
+            <views:LogView x:Name="Log" Visibility="Collapsed" />
+        </Grid>
+    </Grid>
 </Window>

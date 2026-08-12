@@ -16,10 +16,11 @@
 - Task 5 added observable/async-command, complete-plus-recent-five logging, dashboard preview/pending/confirmed state, and settings editing. Dashboard nozzle state is refreshed from controller output-mask readback; setpoint changes remain local until commit and map calibration mA to microamps with midpoint-away-from-zero rounding.
 - Task 6 added merged dark-HMI resource dictionaries, shared cards/headings/touch-status/focus-disabled-pending styles, and native reusable nozzle-array, segmented-gauge, and touch-only numeric-keypad controls. These controls are not yet inserted into MainWindow or final views.
 - Task 6 review remediation renders pending nozzle state from the complete preview target, blocks duplicate nozzle/gauge interactions while pending, clamps gauge preview/release to the configured safety floor, and adds dynamic Chinese automation semantics to nozzles and gauges.
+- Task 7 replaced the legacy MainWindow with the dark borderless shell and native dashboard/settings/full-log views, binds real/disconnected/demo sessions, preserves automatic discovery/reconnect and status refresh, and adds `Tools/Capture-UIReview.ps1` for six deterministic demo PNG dimensions.
 
 ## Current
 
-Desktop local configuration, interaction state, and reusable WPF controls are ready for Task 7 view integration. Hardware flashing, serial-device verification, UI automation, and physical-output acceptance have not been performed.
+Task 7 WPF view integration and reference-fidelity rebuild are implemented. Exact-pixel off-screen screenshots at six supported sizes are verified, with visual inspection at 1920x1080, 1366x768, 1280x800 and 1920x1200. Hardware flashing, serial-device verification, physical-touch acceptance and physical-output acceptance have not been performed.
 
 ## Next
 

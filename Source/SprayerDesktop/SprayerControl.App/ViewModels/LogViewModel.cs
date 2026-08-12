@@ -4,13 +4,15 @@ namespace SprayerControl.App.ViewModels;
 
 public sealed class LogViewModel : ObservableObject
 {
+    private readonly Func<DateTimeOffset> _clock;
     private readonly ObservableCollection<string> _entries = [];
     private readonly ObservableCollection<string> _recentEntries = [];
     private readonly ReadOnlyObservableCollection<string> _readOnlyEntries;
     private readonly ReadOnlyObservableCollection<string> _readOnlyRecentEntries;
 
-    public LogViewModel()
+    public LogViewModel(Func<DateTimeOffset>? clock = null)
     {
+        _clock = clock ?? (() => DateTimeOffset.Now);
         _readOnlyEntries = new ReadOnlyObservableCollection<string>(_entries);
         _readOnlyRecentEntries = new ReadOnlyObservableCollection<string>(_recentEntries);
     }
@@ -22,7 +24,7 @@ public sealed class LogViewModel : ObservableObject
     public void Add(string entry)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(entry);
-        _entries.Add(entry);
+        _entries.Add($"{_clock():HH:mm:ss}  {entry}");
         RebuildRecentEntries();
     }
 

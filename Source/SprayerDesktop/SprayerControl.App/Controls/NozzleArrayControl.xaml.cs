@@ -83,8 +83,9 @@ public partial class NozzleArrayControl : UserControl
         string state = active ? "开启" : "关闭";
         string pending = IsPending ? "指令发送中" : "已由控制器确认";
         button.IsEnabled = !IsPending;
-        button.Background = FindBrush(active ? "HmiAmberBrush" : "HmiMutedTextBrush");
-        button.Foreground = FindBrush("HmiRaisedPanelBrush");
+        // 保持喷嘴为透明圆形触控区；状态只显示在完整双圆盘，不使用矩形色块。
+        button.Background = Brushes.Transparent;
+        button.Foreground = FindBrush(active ? "HmiAmberBrush" : "HmiMutedTextBrush");
         button.BorderBrush = FindBrush(IsPending ? "HmiCyanBrush" : active ? "HmiAmberBrush" : "HmiBorderBrush");
         AutomationProperties.SetName(button, $"第 {group} 组{side}喷嘴");
         AutomationProperties.SetHelpText(button, "触摸可切换喷嘴；控制器读回状态为准。");

@@ -1,40 +1,239 @@
-using System.Collections.ObjectModel;
-using System.Diagnostics;
 using System.IO;
 using System.Windows;
 using System.Windows.Media;
 using System.Windows.Threading;
+using SprayerControl.App.Services;
+using SprayerControl.App.ViewModels;
 using SprayerControl.Core;
 
 namespace SprayerControl.App;
-public partial class MainWindow:Window
+
+/// <summary>触摸外壳负责导航、发现、会话生命周期和周期性真实状态刷新。</summary>
+public partial class MainWindow : Window
 {
-    private ControllerConnection? _connection; private ControllerClient? _client; private readonly CancellationTokenSource _lifetime=new();
-    private Task? _discoveryTask; private readonly ObservableCollection<string> _log=[]; private readonly DispatcherTimer _heartbeat;
-    private bool _heartbeatBusy,_syncSwitch,_confirmedEnabled; private int _ok,_fail;
-    public MainWindow(){InitializeComponent();OperationLogList.ItemsSource=_log;AddLog("软件启动，自动扫描控制器；连接后同步控制器实际状态");Loaded+=(_,_)=>StartDiscovery();
-        _heartbeat=new DispatcherTimer{Interval=TimeSpan.FromMilliseconds(500)};_heartbeat.Tick+=Heartbeat_Tick;_heartbeat.Start();}
-    private void StartDiscovery(){if(!_lifetime.IsCancellationRequested&&(_discoveryTask is null||_discoveryTask.IsCompleted))_discoveryTask=DiscoverAsync(_lifetime.Token);}
-    private async Task DiscoverAsync(CancellationToken token){SetEnabled(false);ConnectionText.Text="正在自动查找控制器……";try{while(!token.IsCancellationRequested&&_connection is null){SerialPortDescriptor[] ports=await WindowsSerialPortDiscovery.GetPortsAsync(token);AddLog($"发现 {ports.Length} 个串口，开始握手");var found=await Task.Run(()=>ControllerDiscovery.TryDiscoverAsync(ports,p=>new ReliableModbusChannel(new SerialModbusChannel(p.PortName)),token,ReportProbe),token);if(found is not null){_connection=found;_client=found.Client;ApplyStatus(found.Status);ConnectionText.Text="控制器已连接";SetEnabled(true);AddLog("已识别并连接控制器");return;}await Task.Delay(2000,token);}}catch(OperationCanceledException)when(token.IsCancellationRequested){}}
-    private void ReportProbe(ControllerProbeResult result)=>Dispatcher.Invoke(()=>AddLog(result.Outcome switch{ControllerProbeOutcome.Connected=>$"{result.Port.PortName} 握手成功（{result.Detail}）",ControllerProbeOutcome.UnsupportedFirmware=>$"{result.Port.PortName} 固件不受支持（{result.Detail}）",_=>$"{result.Port.PortName} 握手失败：{result.Detail}"}));
-    private void SetEnabled(bool e){PwmGroup.IsEnabled=e;ReturnValveGroup.IsEnabled=e;CommandButtons.IsEnabled=e;}
-    private async Task DisconnectAsync(){var old=_connection;_connection=null;_client=null;SetEnabled(false);ConnectionText.Text="通信中断，控制器独立运行，正在重新连接……";AddLog("通信中断，控制器继续按当前参数独立运行，重新扫描");if(old is not null)await old.DisposeAsync();StartDiscovery();}
-    private ControllerClient Client=>_client??throw new InvalidOperationException("控制器尚未连接。");
-    private SprayMode SelectedMode()=>Mode4.IsChecked==true?SprayMode.Group4:Mode34.IsChecked==true?SprayMode.Groups34:Mode234.IsChecked==true?SprayMode.Groups234:ModeAll.IsChecked==true?SprayMode.AllGroups:SprayMode.AllOff;
-    private static ushort Parse(System.Windows.Controls.TextBox box,string name)=>ushort.TryParse(box.Text,out var v)?v:throw new ArgumentException($"{name}必须是整数。");
-    private ControllerSettings ReadSettings()=>new(SelectedMode(),Parse(DutyText,"统一占空比"),false,CurrentTargetParser.ParseMilliamps(TargetCurrent.Text));
-    private async void Heartbeat_Tick(object? s,EventArgs e){if(_heartbeatBusy||_client is null)return;_heartbeatBusy=true;try{ApplyStatus(await Client.ReadStatusAsync(_lifetime.Token));}catch(Exception ex)when(ex is TimeoutException or IOException or ModbusProtocolException){await DisconnectAsync();}finally{_heartbeatBusy=false;}}
-    private async void PwmMasterSwitch_Click(object s,RoutedEventArgs e){if(_syncSwitch)return;bool requested=PwmMasterSwitch.IsChecked==true;try{await ExecuteAsync(requested?"开启PWM总开关":"关闭PWM总开关",()=>Client.SetPwmEnabledAsync(requested));_confirmedEnabled=requested;}catch(Exception ex){SetSwitch(_confirmedEnabled);ShowError(ex);}}
-    private async void Apply_Click(object s,RoutedEventArgs e){try{await ExecuteAsync("应用喷头参数和目标电流",()=>Client.WriteSettingsAsync(ReadSettings()));}catch(Exception ex){ShowError(ex);}}
-    private async void ReadStatus_Click(object s,RoutedEventArgs e){try{ApplyStatus(await ExecuteAsync("读取控制器状态",()=>Client.ReadStatusAsync()));}catch(Exception ex){ShowError(ex);}}
-    private async void Save_Click(object s,RoutedEventArgs e){if(MessageBox.Show("请确认水泵已关闭。是否保存当前参数？","保存确认",MessageBoxButton.YesNo,MessageBoxImage.Warning)!=MessageBoxResult.Yes)return;try{await ExecuteAsync("发送待保存参数",()=>Client.WriteSettingsAsync(ReadSettings() with{PersistenceEnabled=true}));await ExecuteAsync("保存参数",()=>Client.SaveToFlashAsync());}catch(Exception ex){ShowError(ex);}}
-    private void ApplyStatus(ControllerStatus x){SetSwitch(x.PwmEnabled);StatusText.Text=$"PWM：{(x.PwmEnabled?"开启":"关闭")}；输出掩码：0x{x.OutputMask:X2}；通信保护：{(x.CommunicationStopped?"已触发":"正常")}；PWM节拍：{x.PwmTick}；目标电流：{x.TargetCurrentMicroamps/1000.0:F3} mA；模块回读：{x.CurrentModuleReadback/1000.0:F3} mA；故障次数：{x.CurrentModuleFaultCount}；固件：0x{x.FirmwareVersion:X4}";}
-    private void SetSwitch(bool e){_syncSwitch=true;_confirmedEnabled=e;PwmMasterSwitch.IsChecked=e;_syncSwitch=false;}
-    private async Task ExecuteAsync(string op,Func<Task> f)=>await ExecuteAsync(op,async()=>{await f();return true;});
-    private async Task<T> ExecuteAsync<T>(string op,Func<Task<T>> f){var sw=Stopwatch.StartNew();AddLog($"发送：{op}");try{T result=await f();_ok++;SetResult($"控制器已回传确认：{op}，{sw.ElapsedMilliseconds} ms",Brushes.DarkGreen,"#E2F4E6");AddLog($"接收：确认“{op}”");Counters();return result;}catch{_fail++;SetResult($"发送失败：{op}",Brushes.DarkRed,"#FBE3E3");AddLog($"失败：{op}");Counters();throw;}}
-    private void SetResult(string m,Brush f,string b){CommunicationResultText.Text=m;CommunicationResultText.Foreground=f;CommunicationResultBorder.Background=(Brush)new BrushConverter().ConvertFromString(b)!;}
-    private void Counters()=>CommunicationCountersText.Text=$"成功 {_ok} 次；失败 {_fail} 次";
-    private void AddLog(string m){_log.Add(OperationLogFormatter.Format(DateTime.Now,m));OperationLogList.ScrollIntoView(_log[^1]);}
-    private void ClearLog_Click(object s,RoutedEventArgs e)=>_log.Clear();private void ShowError(Exception e){StatusText.Text=$"操作失败：{e.Message}";MessageBox.Show(e.Message,"操作失败",MessageBoxButton.OK,MessageBoxImage.Error);}
-    protected override async void OnClosed(EventArgs e){_heartbeat.Stop();_lifetime.Cancel();if(_connection is not null)await _connection.DisposeAsync();_lifetime.Dispose();base.OnClosed(e);}
+    private readonly CancellationTokenSource _lifetime = new();
+    private readonly DispatcherTimer _refreshTimer = new() { Interval = TimeSpan.FromMilliseconds(500) };
+    private readonly LogViewModel _log = new();
+    private readonly IHostConfigurationStore _store = new JsonHostConfigurationStore();
+    private IControllerSession? _session;
+    private DashboardViewModel? _dashboard;
+    private SettingsViewModel? _settings;
+    private HostConfiguration? _activeConfiguration;
+    private Task? _discoveryTask;
+    private bool _refreshing;
+    private readonly bool _demo;
+
+    public MainWindow()
+    {
+        InitializeComponent();
+        _demo = App.DemoMode;
+        Loaded += OnLoaded;
+        Closed += OnClosed;
+        _refreshTimer.Tick += RefreshTimer_Tick;
+        Dashboard.ShowLogRequested += ShowLog;
+        Settings.BackRequested += ShowDashboard;
+        Settings.ConfigurationSaved += ApplyConfiguration;
+        Log.BackRequested += ShowDashboard;
+    }
+
+    private async void OnLoaded(object sender, RoutedEventArgs e)
+    {
+        if (App.CapturePath is not null)
+        {
+            WindowState = WindowState.Normal; Width = App.CapturePixelWidth; Height = App.CapturePixelHeight;
+            Left = -20000; Top = -20000; UpdateLayout();
+        }
+        await CreateViewModelsAsync(_lifetime.Token);
+        _refreshTimer.Start();
+        if (_demo) SetHeaderConnection("演示控制器已连接", connected: true);
+        if (App.CapturePath is not null)
+        {
+            _ = Dispatcher.BeginInvoke(() => App.Capture(this), DispatcherPriority.ApplicationIdle);
+            return;
+        }
+        if (_demo) return;
+        StartDiscovery();
+    }
+
+    private async Task CreateViewModelsAsync(CancellationToken token)
+    {
+        HostConfiguration? configuration;
+        if (_demo)
+            configuration = CreateDemoConfiguration();
+        else
+        {
+            var loader = new SettingsViewModel(_store);
+            await loader.LoadAsync(token);
+            configuration = loader.SavedConfiguration;
+        }
+
+        _activeConfiguration = configuration;
+        _session = _demo ? new DemoControllerSession() : new DisconnectedControllerSession();
+        _dashboard = new DashboardViewModel(_session, configuration, _log);
+        _settings = new SettingsViewModel(_store, configuration, allowPersistence: !_demo);
+        Dashboard.Bind(_dashboard, _demo);
+        Settings.Bind(_settings, _demo);
+        Log.Bind(_log);
+
+        if (_demo)
+        {
+            _dashboard.PreviewDuty = 60;
+            _dashboard.PreviewReturnOpening = 65;
+            await _session.SetNozzleMaskAsync(NozzleMask.ForPreset(CanopyPreset.Groups34, true, true), token);
+            await _session.SetPwmEnabledAsync(true, token);
+            await _dashboard.CommitReturnOpeningAsync(token);
+            _log.Add("系统启动完成，演示控制器已连接");
+            _log.Add("电磁阀总开关 已开启");
+            _log.Add("电磁阀占空比设为 60%");
+            _log.Add("喷头模式切换为 第3+4组");
+            _log.Add("回流阀开度设为 65%");
+        }
+        UpdateSettingsControllerAction();
+    }
+
+    private void StartDiscovery()
+    {
+        if (!_lifetime.IsCancellationRequested && (_discoveryTask is null || _discoveryTask.IsCompleted))
+            _discoveryTask = DiscoverAsync(_lifetime.Token);
+    }
+
+    private async Task DiscoverAsync(CancellationToken token)
+    {
+        while (!token.IsCancellationRequested && _session is DisconnectedControllerSession)
+        {
+            try
+            {
+                SetHeaderConnection("正在自动查找控制器", connected: false);
+                SerialPortDescriptor[] ports = await WindowsSerialPortDiscovery.GetPortsAsync(token);
+                ControllerConnection? found = await Task.Run(() => ControllerDiscovery.TryDiscoverAsync(
+                    ports, port => new ReliableModbusChannel(new SerialModbusChannel(port.PortName)), token), token);
+                if (found is null)
+                {
+                    await Task.Delay(2000, token);
+                    continue;
+                }
+                var session = await ModbusControllerSession.CreateAsync(found.Client, found, token);
+                await ReplaceSessionAsync(session, token);
+                SetHeaderConnection("控制器已连接", connected: true);
+                _log.Add("控制器已发现并完成连接。");
+            }
+            catch (OperationCanceledException) when (token.IsCancellationRequested) { break; }
+            catch (Exception exception)
+            {
+                _log.Add($"自动发现失败：{exception.Message}");
+                SetHeaderConnection("通信异常，正在重试", connected: false, error: true);
+                await Task.Delay(2000, token);
+            }
+        }
+    }
+
+    private async void RefreshTimer_Tick(object? sender, EventArgs e)
+    {
+        if (_refreshing || _dashboard is null || _session is null || !_session.IsConnected) return;
+        _refreshing = true;
+        try
+        {
+            await _dashboard.RefreshAsync(_lifetime.Token);
+            if (_dashboard.HasCommunicationFault && !_demo)
+                await ReturnToDiscoveryAsync();
+        }
+        finally { _refreshing = false; }
+    }
+
+    private async Task ReplaceSessionAsync(IControllerSession session, CancellationToken token)
+    {
+        IControllerSession? old = _session;
+        _session = session;
+        _dashboard = new DashboardViewModel(session, _settings?.SavedConfiguration, _log);
+        Dashboard.Bind(_dashboard, false);
+        await _dashboard.RefreshAsync(token);
+        if (old is not null) await old.DisposeAsync();
+        UpdateSettingsControllerAction();
+    }
+
+    private async Task ReturnToDiscoveryAsync()
+    {
+        IControllerSession? old = _session;
+        _session = new DisconnectedControllerSession();
+        _dashboard = new DashboardViewModel(_session, _settings?.SavedConfiguration, _log);
+        Dashboard.Bind(_dashboard, false);
+        SetHeaderConnection("通信中断，正在重新连接", connected: false, error: true);
+        _log.Add("通信中断；控制器继续按当前参数独立运行，重新扫描。");
+        if (old is not null) await old.DisposeAsync();
+        UpdateSettingsControllerAction();
+        StartDiscovery();
+    }
+
+    private void ApplyConfiguration(HostConfiguration configuration)
+    {
+        int? oldSafety = _activeConfiguration?.ReturnValveSafetyMinimum;
+        _activeConfiguration = configuration;
+        _dashboard?.UpdateConfiguration(configuration);
+        if (oldSafety.HasValue && oldSafety.Value != configuration.ReturnValveSafetyMinimum)
+            _log.Add($"回流阀安全下限由 {oldSafety}% 修改为 {configuration.ReturnValveSafetyMinimum}%（已确认并保存）");
+        else
+            _log.Add("本地配置已保存并应用到仪表盘。");
+        UpdateSettingsControllerAction();
+    }
+
+    private void UpdateSettingsControllerAction()
+    {
+        bool available = !_demo && _session?.IsConnected == true && _session.Capabilities.SupportsExplicitNozzleMask && _settings?.SavedConfiguration is not null;
+        string reason = _demo ? "演示模式禁止写入控制器。"
+            : _session?.IsConnected != true ? "控制器未连接。"
+            : !_session.Capabilities.SupportsExplicitNozzleMask ? "控制器固件不支持独立八喷嘴上电默认值。"
+            : "请先保存有效的本地配置。";
+        Settings.ConfigureControllerDefaults(available, reason, available ? SaveControllerDefaultsAsync : null);
+    }
+
+    private async Task SaveControllerDefaultsAsync(CancellationToken token)
+    {
+        if (_demo || _session?.IsConnected != true || _dashboard is null || _settings?.SavedConfiguration is not HostConfiguration configuration)
+            throw new InvalidOperationException("当前状态不允许保存控制器上电默认值。");
+        double current = configuration.ReturnValveCalibration.CurrentMilliampsAt(_dashboard.PreviewReturnOpening, configuration.ReturnValveSafetyMinimum);
+        ushort microamps = checked((ushort)Math.Round(current * 1000, MidpointRounding.AwayFromZero));
+        await _session.SavePowerOnDefaultsAsync(_dashboard.ConfirmedMask, (ushort)_dashboard.ConfirmedDuty, microamps, token);
+        _log.Add("喷嘴掩码、占空比和回流阀电流已保存为控制器上电默认值。");
+    }
+
+    private void SetHeaderConnection(string text, bool connected, bool error = false)
+    {
+        ConnectionText.Text = text;
+        HeaderConnectionDot.Fill = (Brush)FindResource(error ? "HmiRedBrush" : connected ? "HmiGreenBrush" : "HmiAmberBrush");
+        ConnectionText.Foreground = (Brush)FindResource(error ? "HmiRedBrush" : connected ? "HmiGreenBrush" : "HmiMutedTextBrush");
+    }
+
+    private void ShowSettings_Click(object sender, RoutedEventArgs e) => Show(Settings);
+    private void ShowLog() => Show(Log);
+    private void ShowDashboard() => Show(Dashboard);
+    private void Show(UIElement target)
+    {
+        Dashboard.Visibility = ReferenceEquals(target, Dashboard) ? Visibility.Visible : Visibility.Collapsed;
+        Settings.Visibility = ReferenceEquals(target, Settings) ? Visibility.Visible : Visibility.Collapsed;
+        Log.Visibility = ReferenceEquals(target, Log) ? Visibility.Visible : Visibility.Collapsed;
+    }
+
+    private async void OnClosed(object? sender, EventArgs e)
+    {
+        _refreshTimer.Stop(); _lifetime.Cancel();
+        if (_session is not null) await _session.DisposeAsync();
+        _lifetime.Dispose();
+    }
+
+    private static HostConfiguration CreateDemoConfiguration() => new(
+        1, 30, 30,
+        new ReturnValveCalibration(Enumerable.Range(1, 10).Select(x => new CalibrationPoint(x * 10, x * 1.2)).ToArray()),
+        DateTimeOffset.UtcNow);
+}
+
+internal sealed class DisconnectedControllerSession : IControllerSession
+{
+    public bool IsConnected => false;
+    public ControllerCapabilities Capabilities => new(1, 0);
+    public Task SetNozzleMaskAsync(NozzleMask mask, CancellationToken cancellationToken = default) => Task.FromException(new IOException("控制器尚未连接。"));
+    public Task SetPwmEnabledAsync(bool enabled, CancellationToken cancellationToken = default) => Task.FromException(new IOException("控制器尚未连接。"));
+    public Task WriteOperatingSetpointsAsync(ushort duty, ushort targetCurrentMicroamps, CancellationToken cancellationToken = default) => Task.FromException(new IOException("控制器尚未连接。"));
+    public Task SavePowerOnDefaultsAsync(NozzleMask mask, ushort duty, ushort targetCurrentMicroamps, CancellationToken cancellationToken = default) => Task.FromException(new IOException("控制器尚未连接。"));
+    public Task<ControllerStatus> ReadStatusAsync(CancellationToken cancellationToken = default) => Task.FromException<ControllerStatus>(new IOException("控制器尚未连接。"));
+    public ValueTask DisposeAsync() => ValueTask.CompletedTask;
 }

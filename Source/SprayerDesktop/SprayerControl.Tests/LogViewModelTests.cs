@@ -9,12 +9,14 @@ public sealed class LogViewModelTests
     [Fact]
     public void RecentViewKeepsNewestFiveWithoutDroppingFullHistory()
     {
-        var log = new LogViewModel();
+        var log = new LogViewModel(() => new DateTimeOffset(2026, 8, 12, 10, 30, 15, TimeSpan.FromHours(8)));
         foreach (int value in Enumerable.Range(1, 6))
             log.Add($"entry-{value}");
 
         Assert.Equal(6, log.Entries.Count);
-        Assert.Equal(["entry-2", "entry-3", "entry-4", "entry-5", "entry-6"], log.RecentEntries);
+        Assert.Equal(6, log.Entries.Count);
+        Assert.All(log.Entries, entry => Assert.StartsWith("10:30:15  ", entry));
+        Assert.Equal(["10:30:15  entry-2", "10:30:15  entry-3", "10:30:15  entry-4", "10:30:15  entry-5", "10:30:15  entry-6"], log.RecentEntries);
         log.Clear();
         Assert.Empty(log.Entries);
         Assert.Empty(log.RecentEntries);

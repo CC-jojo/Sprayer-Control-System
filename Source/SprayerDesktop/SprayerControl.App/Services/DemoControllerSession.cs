@@ -63,6 +63,9 @@ public sealed class DemoControllerSession : IControllerSession
             0, 0, _targetCurrentMicroamps, 0, 0, 0, 0x0202, _pwmEnabled, outputMask, false));
     }
 
+    public Task SavePowerOnDefaultsAsync(NozzleMask mask, ushort duty, ushort targetCurrentMicroamps, CancellationToken cancellationToken = default) =>
+        Task.FromException(new NotSupportedException("演示模式禁止写入控制器上电默认值。"));
+
     public ValueTask DisposeAsync()
     {
         if (Interlocked.Exchange(ref _disposed, 1) == 0)

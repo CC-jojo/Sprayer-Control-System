@@ -7,6 +7,7 @@ namespace SprayerControl.App.ViewModels;
 public sealed class SettingsViewModel : ObservableObject
 {
     private readonly IHostConfigurationStore _store;
+    private readonly bool _allowPersistence;
     private readonly ObservableCollection<double?> _calibrationCurrents = Enumerable.Repeat<double?>(null, 10).ToObservableCollection();
     private readonly ReadOnlyObservableCollection<double?> _readOnlyCalibrationCurrents;
     private int _pwmDutyMinimum = 30;
@@ -14,9 +15,10 @@ public sealed class SettingsViewModel : ObservableObject
     private string _validationError = string.Empty;
     private HostConfiguration? _savedConfiguration;
 
-    public SettingsViewModel(IHostConfigurationStore store, HostConfiguration? configuration = null)
+    public SettingsViewModel(IHostConfigurationStore store, HostConfiguration? configuration = null, bool allowPersistence = true)
     {
         _store = store ?? throw new ArgumentNullException(nameof(store));
+        _allowPersistence = allowPersistence;
         _readOnlyCalibrationCurrents = new ReadOnlyObservableCollection<double?>(_calibrationCurrents);
         if (configuration is not null)
             CopyFrom(configuration);
@@ -24,6 +26,8 @@ public sealed class SettingsViewModel : ObservableObject
     }
 
     public AsyncCommand SaveCommand { get; }
+
+    public bool CanSaveLocal => _allowPersistence;
 
     public int PwmDutyMinimum
     {
@@ -97,6 +101,12 @@ public sealed class SettingsViewModel : ObservableObject
 
     public async Task<bool> SaveAsync(CancellationToken cancellationToken = default)
     {
+        if (!_allowPersistence)
+        {
+            ValidationError = "演示模式禁止写入本地配置。";
+            return false;
+        }
+
         HostConfiguration configuration;
         try
         {

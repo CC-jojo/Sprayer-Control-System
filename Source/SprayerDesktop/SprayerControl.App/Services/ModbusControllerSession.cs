@@ -79,6 +79,23 @@ public sealed class ModbusControllerSession : IControllerSession
         return _client.WriteOperatingSetpointsAsync(duty, targetCurrentMicroamps, cancellationToken);
     }
 
+    public async Task SavePowerOnDefaultsAsync(
+        NozzleMask mask,
+        ushort duty,
+        ushort targetCurrentMicroamps,
+        CancellationToken cancellationToken = default)
+    {
+        ThrowIfDisposed();
+        if (!Capabilities.SupportsExplicitNozzleMask)
+            throw new NotSupportedException("The connected firmware cannot persist an explicit eight-nozzle mask.");
+
+        await _client.WriteSettingsAsync(
+            new ControllerSettings(SprayMode.Custom, duty, PersistenceEnabled: true, targetCurrentMicroamps),
+            cancellationToken);
+        await _client.SetNozzleMaskAsync(mask, cancellationToken);
+        await _client.SaveToFlashAsync(cancellationToken);
+    }
+
     public Task<ControllerStatus> ReadStatusAsync(CancellationToken cancellationToken = default)
     {
         ThrowIfDisposed();

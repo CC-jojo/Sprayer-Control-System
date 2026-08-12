@@ -50,3 +50,13 @@ When recreating a baseline, first run Tools/tests/Initialize-SourceCopies.Tests.
 - `Controls/SegmentedGaugeControl` previews locally while dragged and calls `ReleaseCommand` once only after a completed mouse or touch gesture. Lost capture cancels without a command.
 - `Controls/TouchNumericKeypad` is touch-only: it displays a sanitized decimal string and exposes confirm/cancel commands; it contains no text-entry control or physical-input handler.
 - Task 6 intentionally leaves the legacy MainWindow untouched. Task 7 must compose the controls into the approved responsive full-bleed three-column dashboard/settings/log views and perform visual-resolution review.
+
+## Task 7 shell/view checkpoint
+
+- Dashboard now follows the approved reference palette and compact 40/24/36 composition with circular 4x2 nozzles, canopy ladder, 240-degree gauges, authoritative 4x2 readback and five timestamped log rows.
+- `Tools/Capture-UIReview.ps1` produces exact-pixel screenshots at six sizes under `Temp/UIReview`; hashes and inspection findings are in `Docs/superpowers/sdd/task-7-report.md`.
+- Settings includes real curve preview/mapped current, confirmed safety-minimum edits, demo persistence blocking and a real separately confirmed controller power-on-default path.
+
+- `MainWindow` starts full-bleed/maximized by default. Use `--demo --windowed --width 1366 --height 768` for hardware-free interaction and `--demo --capture --width 1366 --height 768` for capture tooling.
+- `Tools/Capture-UIReview.ps1` produces the six required PNG names under ignored `Temp/UIReview` and validates their PNG dimensions. See `Docs/superpowers/sdd/task-7-report.md` for the exact hashes and the local high-DPI capture limitation.
+- `DashboardView`, `SettingsView`, and `LogView` are native WPF views. Settings is intentionally usable with a disconnected controller; local save updates the active dashboard without restart. Demo calibration is visibly marked and never saved as a product default.

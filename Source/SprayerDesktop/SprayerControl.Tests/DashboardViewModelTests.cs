@@ -61,6 +61,7 @@ public sealed class DashboardViewModelTests
         Assert.Equal((byte)0x01, dashboard.PreviewMask.Value);
         Assert.Equal((byte)0x01, dashboard.ConfirmedMask.Value);
         Assert.Contains("lost controller", dashboard.ErrorText);
+        Assert.True(dashboard.HasCommunicationFault);
         Assert.Contains(log.Entries, entry => entry.Contains("lost controller"));
     }
 
@@ -78,6 +79,7 @@ public sealed class DashboardViewModelTests
         Assert.Equal(((ushort)45, (ushort)350), Assert.Single(session.Setpoints));
         Assert.Equal(45, dashboard.ConfirmedDuty);
         Assert.Equal(35, dashboard.ConfirmedReturnOpening);
+        Assert.Equal(0.35, dashboard.PreviewMappedCurrentMilliamps!.Value, 6);
     }
 
     [Fact]
@@ -85,10 +87,14 @@ public sealed class DashboardViewModelTests
     {
         var session = new FakeSession { Status = Status() };
         var dashboard = new DashboardViewModel(session, null, new LogViewModel());
+        await dashboard.RefreshAsync();
         dashboard.PreviewDuty = 45;
         await dashboard.CommitDutyAsync();
         Assert.Empty(session.Setpoints);
-        Assert.Contains("calibration", dashboard.ErrorText, StringComparison.OrdinalIgnoreCase);
+        Assert.Equal("比例阀尚未完成标定，请先在设置中完成十点标定", dashboard.ErrorText);
+        Assert.False(dashboard.HasCommunicationFault);
+        Assert.False(dashboard.CanCommitSetpoints);
+        Assert.True(dashboard.IsConnected);
 
         var configured = new DashboardViewModel(session, JsonHostConfigurationStoreTests.CreateConfiguration(), new LogViewModel());
         configured.PreviewReturnOpening = 10;
@@ -246,4 +252,5 @@ public sealed class DashboardViewModelTests
 
         public ValueTask DisposeAsync() => ValueTask.CompletedTask;
     }
+
 }

@@ -60,6 +60,20 @@ public sealed class SettingsViewModelTests
         Assert.Equal(9.9, settings.CalibrationCurrents[0]);
     }
 
+    [Fact]
+    public async Task DemoModeHardBlocksLocalPersistence()
+    {
+        var store = new RecordingStore();
+        var settings = new SettingsViewModel(store, JsonHostConfigurationStoreTests.CreateConfiguration(), allowPersistence: false);
+
+        bool saved = await settings.SaveAsync();
+
+        Assert.False(saved);
+        Assert.Equal(0, store.SaveCount);
+        Assert.False(settings.CanSaveLocal);
+        Assert.Contains("演示模式", settings.ValidationError);
+    }
+
     private sealed class RecordingStore : IHostConfigurationStore
     {
         public HostConfiguration? LoadResult { get; set; }

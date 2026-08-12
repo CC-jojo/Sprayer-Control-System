@@ -111,6 +111,7 @@ public sealed class MainWindowLayoutTests
         Assert.Contains("Math.Max(Minimum, SafetyMinimum)", gaugeCode);
         Assert.Contains("CoercePreviewValue", gaugeCode);
         Assert.Contains("if (IsPending)", gaugeCode);
+        Assert.Contains("!IsEnabled", gaugeCode);
         Assert.Contains("AutomationProperties.SetName", gaugeCode);
         Assert.Contains("AutomationProperties.SetHelpText", gaugeCode);
         Assert.Contains("AutomationProperties.SetItemStatus", gaugeCode);
@@ -141,8 +142,9 @@ public sealed class MainWindowLayoutTests
         Assert.DoesNotContain("RefreshPorts_Click", xaml);
         Assert.DoesNotContain("Connect_Click", xaml);
         Assert.DoesNotContain("<ComboBox", xaml);
-        Assert.Contains("PWM总开关（上电默认开启）", xaml);
-        Assert.DoesNotContain("PWM总开关（默认关闭）", xaml);
+        string dashboard = File.ReadAllText(Path.Combine(GetAppDirectory(), "Views", "DashboardView.xaml"));
+        Assert.Contains("PWM总开关", dashboard);
+        Assert.DoesNotContain("默认关闭", dashboard);
     }
 
     [Fact]
@@ -167,15 +169,63 @@ public sealed class MainWindowLayoutTests
             "../../../../SprayerControl.App/MainWindow.xaml.cs", AppContext.BaseDirectory);
         string source = File.ReadAllText(path);
 
-        Assert.Contains("连接后同步控制器实际状态", source);
+        Assert.Contains("周期性真实状态刷新", source);
         Assert.Contains("控制器继续按当前参数独立运行", source);
         Assert.DoesNotContain("PWM默认关闭", source);
         Assert.DoesNotContain("PWM由控制器安全关闭", source);
 
-        int disconnectStart = source.IndexOf("private async Task DisconnectAsync", StringComparison.Ordinal);
-        int clientStart = source.IndexOf("private ControllerClient Client", disconnectStart, StringComparison.Ordinal);
-        string disconnectMethod = source[disconnectStart..clientStart];
-        Assert.DoesNotContain("SetSwitch(false)", disconnectMethod);
+        int disconnectStart = source.IndexOf("private async Task ReturnToDiscoveryAsync", StringComparison.Ordinal);
+        int configurationStart = source.IndexOf("private void ApplyConfiguration", disconnectStart, StringComparison.Ordinal);
+        string disconnectMethod = source[disconnectStart..configurationStart];
+        Assert.DoesNotContain("SetPwmEnabledAsync(false)", disconnectMethod);
+    }
+
+    [Fact]
+    public void ComposesResponsiveFullBleedDashboardSettingsAndLogViews()
+    {
+        string appDirectory = GetAppDirectory();
+        string shell = File.ReadAllText(Path.Combine(appDirectory, "MainWindow.xaml"));
+        string dashboard = File.ReadAllText(Path.Combine(appDirectory, "Views", "DashboardView.xaml"));
+        string settings = File.ReadAllText(Path.Combine(appDirectory, "Views", "SettingsView.xaml"));
+        string log = File.ReadAllText(Path.Combine(appDirectory, "Views", "LogView.xaml"));
+
+        Assert.Contains("WindowStyle=\"None\"", shell);
+        Assert.Contains("WindowState=\"Maximized\"", shell);
+        Assert.Contains("HmiBackgroundBrush", shell);
+        Assert.Contains("DashboardView", shell);
+        Assert.Contains("SettingsView", shell);
+        Assert.Contains("LogView", shell);
+        Assert.DoesNotContain("<TextBox", shell);
+        Assert.Contains("40*", dashboard);
+        Assert.Contains("24*", dashboard);
+        Assert.Contains("36*", dashboard);
+        Assert.Contains("NozzleArrayControl", dashboard);
+        Assert.Contains("SegmentedGaugeControl", dashboard);
+        Assert.Contains("CanopySelector", dashboard);
+        Assert.Contains("NozzleReadbackGrid", dashboard);
+        Assert.Contains("ConnectionStateDot", dashboard);
+        Assert.Contains("ErrorText", dashboard);
+        Assert.Contains("DutyGauge.IsEnabled", File.ReadAllText(Path.Combine(appDirectory, "Views", "DashboardView.xaml.cs")));
+        Assert.Contains("OpeningGauge.IsEnabled", File.ReadAllText(Path.Combine(appDirectory, "Views", "DashboardView.xaml.cs")));
+        Assert.Contains("HasCommunicationFault", File.ReadAllText(Path.Combine(appDirectory, "MainWindow.xaml.cs")));
+        Assert.DoesNotContain("!string.IsNullOrWhiteSpace(_dashboard.ErrorText)", File.ReadAllText(Path.Combine(appDirectory, "MainWindow.xaml.cs")));
+        Assert.Contains("运行状态", dashboard);
+        Assert.Contains("安全位置", dashboard);
+        Assert.Contains("查看全部日志", dashboard);
+        Assert.Contains("查看全部日志", dashboard);
+        Assert.DoesNotContain("TextBox", dashboard);
+        Assert.Contains("TouchNumericKeypad", settings);
+        Assert.Contains("PWM占空比下限", settings);
+        Assert.Contains("回流阀安全下限", settings);
+        Assert.Contains("保存本地配置", settings);
+        Assert.Contains("CurveCanvas", settings);
+        Assert.Contains("MappedCurrentText", settings);
+        Assert.Contains("确认安全下限修改", settings);
+        Assert.Contains("保存为上电默认值", settings);
+        Assert.Contains("ControllerDefaultReason", settings);
+        Assert.DoesNotContain("压力", settings);
+        Assert.Contains("返回", log);
+        Assert.Contains("清空日志", log);
     }
 
     private static string GetAppDirectory() => Path.GetFullPath(
