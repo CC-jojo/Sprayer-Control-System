@@ -14,7 +14,10 @@ public static class RegisterMap
     public const ushort TargetCurrentMicroamps = 0x0009;
     public const ushort SaveCommand = 0x000A;
     public const ushort PwmEnabled = 0x000B;
+    public const ushort NozzleMask = 0x000C;
 
     public const ushort StatusStart = 0x0100;
     public const ushort StatusCount = 10;
+    public const ushort CapabilityStart = 0x010A;
+    public const ushort CapabilityCount = 2;
 }

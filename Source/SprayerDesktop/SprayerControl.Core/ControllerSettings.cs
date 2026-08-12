@@ -1,6 +1,6 @@
 namespace SprayerControl.Core;
 
-public enum SprayMode : ushort { AllOff=0, Group4=1, Groups34=2, Groups234=3, AllGroups=4 }
+public enum SprayMode : ushort { AllOff=0, Group4=1, Groups34=2, Groups234=3, AllGroups=4, Custom=5 }
 public readonly record struct SettingsValidation(bool IsValid,string ErrorMessage){public static SettingsValidation Success=>new(true,string.Empty);public static SettingsValidation Failure(string m)=>new(false,m);}
 public sealed record ControllerSettings(SprayMode Mode,ushort Duty,bool PersistenceEnabled,ushort TargetCurrentMicroamps)
 {

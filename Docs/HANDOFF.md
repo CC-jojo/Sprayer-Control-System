@@ -28,3 +28,10 @@ Run the commands in Docs/PROGRESS.md, record exact outputs in that milestone's p
 For Task 3, run the two existing firmware checks with `powershell.exe -File`, then run the native CTest command and `cmake --fresh --preset Release` / `cmake --build --preset Release --target clean` / `cmake --build --preset Release` from `Source/SprayerController`. The fresh configure/build is compiler-only verification; do not invoke the separately defined `flash` target without explicit hardware authorization.
 
 When recreating a baseline, first run Tools/tests/Initialize-SourceCopies.Tests.ps1. The copy script intentionally rejects any baseline/project/destination overlap, including a path that resolves into a baseline through a junction or other reparse point.
+
+## Task 4 desktop protocol/session checkpoint
+
+- Use `ModbusControllerSession.CreateAsync(client, ownedLifetime)` after discovery. It reads and caches capabilities once; give it the channel/connection lifetime only when the session owns disposal.
+- Explicit nozzle masks require feature bit `0x0001`. Legacy capability fallback is only Modbus exception code `0x02`; all other protocol and transport failures must remain visible.
+- `DemoControllerSession` is the hardware-free session for later UI work. It starts as protocol v2, delays confirmation through an injectable delegate, supports `FailNextOperation`, and returns a PWM-gated output mask.
+- Re-run the Task 4 commands in Docs/PROGRESS.md before making follow-on UI changes. The detailed evidence and unresolved hardware limitation are in Docs/superpowers/sdd/task-4-report.md.

@@ -13,7 +13,7 @@ Do not modify, move, rename, or delete these baselines. Editable copies will be 
 
 ## Current phase
 
-Task 3 firmware protocol work is complete in the local task commit: copied STM32 firmware now exposes protocol v2 explicit eight-nozzle control at 0x000C, capability registers 0x010A..0x010B, schema-v3/v4 compatible configuration decoding, and firmware version 0x0202. Desktop protocol/client integration remains Task 4.
+Tasks 3 and 4 are complete in local task commits. Firmware exposes protocol-v2 explicit eight-nozzle control at 0x000C and capabilities at 0x010A..0x010B. The desktop now detects those capabilities with illegal-address-only legacy fallback, writes explicit masks and atomic operating setpoints, handles five-byte serial exception frames, and exposes hardware/demo controller sessions. Task 5 remains local configuration and interaction ViewModels.
 
 ## Baseline checkpoint and migration
 
@@ -46,3 +46,4 @@ Read `Docs/superpowers/specs/2026-08-12-sprayer-touch-hmi-design.md` before plan
 - Controller feedback, not optimistic UI state, is authoritative for nozzle and PWM status.
 - Never store credentials in this project.
 - Task 3 verification is recorded in Docs/superpowers/sdd/task-3-report.md: native MSVC CTest, both existing firmware PowerShell tests, and a fresh compiler-backed ARM Release build completed without flashing hardware.
+- Task 4 verification is recorded in Docs/superpowers/sdd/task-4-report.md: focused Release tests 40/40, full desktop Release tests 135/135, Release build with 0 warnings and 0 errors. No serial hardware or spraying hardware was used.

@@ -29,8 +29,15 @@ public sealed class SerialModbusChannel : IModbusChannel
                 _port.DiscardInBuffer();
                 _port.Write(request, 0, request.Length);
 
-                byte[] response = new byte[responseLength];
-                int offset = 0;
+                if (responseLength < 5)
+                    throw new ArgumentOutOfRangeException(nameof(responseLength));
+
+                byte[] header = new byte[2];
+                ReadExactly(header, 0, header.Length, cancellationToken);
+                int resolvedLength = ModbusRtuCodec.DetermineResponseLength(header, responseLength);
+                byte[] response = new byte[resolvedLength];
+                header.CopyTo(response, 0);
+                int offset = header.Length;
                 while (offset < response.Length)
                 {
                     cancellationToken.ThrowIfCancellationRequested();
@@ -54,5 +61,15 @@ public sealed class SerialModbusChannel : IModbusChannel
         _port.Dispose();
         _mutex.Dispose();
         return ValueTask.CompletedTask;
+    }
+
+    private void ReadExactly(byte[] buffer, int offset, int count, CancellationToken cancellationToken)
+    {
+        int read = 0;
+        while (read < count)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            read += _port.Read(buffer, offset + read, count - read);
+        }
     }
 }

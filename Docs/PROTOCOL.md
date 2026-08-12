@@ -39,6 +39,13 @@ Bit mapping is group 1 left/right = bits 0/1, group 2 = bits 2/3, group 3 = bits
 
 Holding register 0x000C accepts exactly one 0x0000..0x00FF value, selects Custom atomically, and leaves configuration unchanged on error. Registers 0x010A and 0x010B return protocol version 2 and feature flags 0x0001. Writing legacy mode 0x0000 restores its derived mask; writing Custom through 0x0000 retains the current mask.
 
+## Desktop protocol-v2 client compatibility
+
+- The desktop reads `0x010A` for two registers before using explicit-mask commands. A valid `0x03|0x80`, exception code `0x02` response means legacy firmware and maps only that case to protocol version 1 with no features. CRC, address, function, malformed-frame, timeout, and every other exception code remain errors.
+- `0x000C` is written through function `0x06` and the desktop validates the complete echoed request. `SprayMode.Custom=5` is a defined desktop value; legacy mode values remain 0 through 4.
+- Unified operating setpoints use one function `0x10` request beginning at `0x0001`, count 9: duty, four zero group placeholders, fixed limits 30/80, persistence off, and target current. Duty is 30..80 and current is 0..20000 microamps; mode and mask are not written.
+- For a capability read, a normal response is nine bytes. The serial transport reads address/function first and stops at the five-byte CRC-complete exception frame when the function has bit `0x80`; it never accepts a partial response.
+
 ## Flash-record compatibility
 
 The record remains 24 bytes and half-word aligned, with the existing header and payload-size field. CRC32 covers bytes 0..19 and is stored at bytes 20..23.

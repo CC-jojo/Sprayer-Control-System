@@ -12,3 +12,5 @@
 | 2026-08-12 | Fix PWM upper limit at 80 percent pending thermal validation. | Hardware safety evidence is required before changing that limit. |
 | 2026-08-12 | Allocate protocol-v2 holding register 0x000C and capabilities 0x010A..0x010B. | Explicit eight-nozzle commands and version/feature negotiation must be unambiguous while retaining legacy modes. |
 | 2026-08-12 | Use Flash schema v4 while decoding schema v3. | The existing 24-byte record retains its layout and CRC coverage; reserved byte 19 now persists the effective nozzle mask. |
+| 2026-08-12 | Detect protocol-v2 desktop support by capability registers, with illegal-address-only legacy fallback. | A legacy device returns Modbus exception `0x02` as a valid five-byte frame; treating any communication fault as legacy would hide real connection/protocol errors. |
+| 2026-08-12 | Add a disposable controller-session boundary without a second retry policy. | Application code can use hardware and demo sessions consistently while existing serial/retry/discovery layers retain transport ownership. |

@@ -77,6 +77,150 @@ public sealed class ControllerClientTests
         Assert.Equal(0xA55A, (channel.LastRequest[4] << 8) | channel.LastRequest[5]);
     }
 
+    [Fact]
+    public async Task WritesExplicitNozzleMaskAsOneEchoedRegister()
+    {
+        var channel = new FakeChannel();
+        var client = new ControllerClient(channel, 1);
+
+        await client.SetNozzleMaskAsync(new NozzleMask(0xA5));
+
+        Assert.Equal(0x06, channel.LastRequest[1]);
+        Assert.Equal(0x000C, (channel.LastRequest[2] << 8) | channel.LastRequest[3]);
+        Assert.Equal(0x00A5, (channel.LastRequest[4] << 8) | channel.LastRequest[5]);
+    }
+
+    [Fact]
+    public async Task CancelledExplicitNozzleMaskIsNotSent()
+    {
+        var channel = new FakeChannel();
+        var client = new ControllerClient(channel, 1);
+        using var cancellation = new CancellationTokenSource();
+        cancellation.Cancel();
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
+            client.SetNozzleMaskAsync(new NozzleMask(0xA5), cancellation.Token));
+
+        Assert.Empty(channel.LastRequest);
+    }
+
+    [Fact]
+    public async Task ReadsProtocolCapabilitiesFromTheAllocatedRegisters()
+    {
+        var channel = new FakeChannel
+        {
+            Response = ModbusRtuCodec.WithCrc([0x01, 0x03, 0x04, 0x00, 0x02, 0x80, 0x01])
+        };
+        var client = new ControllerClient(channel, 1);
+
+        ControllerCapabilities capabilities = await client.ReadCapabilitiesAsync();
+
+        Assert.Equal(0x010A, (channel.LastRequest[2] << 8) | channel.LastRequest[3]);
+        Assert.Equal(2, (channel.LastRequest[4] << 8) | channel.LastRequest[5]);
+        Assert.Equal((ushort)2, capabilities.ProtocolVersion);
+        Assert.Equal((ushort)0x8001, capabilities.FeatureFlags);
+        Assert.True(capabilities.SupportsExplicitNozzleMask);
+    }
+
+    [Fact]
+    public async Task CapabilityIllegalAddressFallsBackToLegacyOnly()
+    {
+        var channel = new FakeChannel
+        {
+            Response = ModbusRtuCodec.WithCrc([0x01, 0x83, 0x02])
+        };
+
+        ControllerCapabilities capabilities = await new ControllerClient(channel).ReadCapabilitiesAsync();
+
+        Assert.Equal(ControllerCapabilities.Legacy, capabilities);
+    }
+
+    [Fact]
+    public async Task PartialIllegalAddressCapabilityFrameDoesNotFallBackToLegacy()
+    {
+        var channel = new FakeChannel
+        {
+            Response = ModbusRtuCodec.WithCrc([0x01, 0x83])
+        };
+
+        ModbusProtocolException exception = await Assert.ThrowsAsync<ModbusProtocolException>(() =>
+            new ControllerClient(channel).ReadCapabilitiesAsync());
+
+        Assert.Null(exception.ExceptionCode);
+    }
+
+    [Theory]
+    [InlineData(0x01)]
+    [InlineData(0x03)]
+    public async Task CapabilityExceptionsOtherThanIllegalAddressPropagate(byte exceptionCode)
+    {
+        var channel = new FakeChannel
+        {
+            Response = ModbusRtuCodec.WithCrc([0x01, 0x83, exceptionCode])
+        };
+
+        ModbusProtocolException exception = await Assert.ThrowsAsync<ModbusProtocolException>(() =>
+            new ControllerClient(channel).ReadCapabilitiesAsync());
+
+        Assert.Equal(exceptionCode, exception.ExceptionCode);
+    }
+
+    [Theory]
+    [InlineData(0x02, 0x04, 0x00, 0x02)]
+    [InlineData(0x02, 0x03, 0x00, 0x02)]
+    public async Task MalformedCapabilityResponsesPropagate(byte slave, byte function, byte high, byte low)
+    {
+        var channel = new FakeChannel
+        {
+            Response = ModbusRtuCodec.WithCrc([slave, function, 0x02, high, low])
+        };
+
+        await Assert.ThrowsAsync<ModbusProtocolException>(() =>
+            new ControllerClient(channel).ReadCapabilitiesAsync());
+    }
+
+    [Fact]
+    public async Task CapabilityTimeoutPropagates()
+    {
+        var client = new ControllerClient(new TimeoutChannel());
+
+        await Assert.ThrowsAsync<TimeoutException>(() => client.ReadCapabilitiesAsync());
+    }
+
+    [Fact]
+    public async Task WritesOperatingSetpointsAsOneNonPersistentBatch()
+    {
+        var channel = new FakeChannel();
+        var client = new ControllerClient(channel, 1);
+
+        await client.WriteOperatingSetpointsAsync(55, 12500);
+
+        Assert.Equal(0x10, channel.LastRequest[1]);
+        Assert.Equal(0x0001, (channel.LastRequest[2] << 8) | channel.LastRequest[3]);
+        Assert.Equal(9, (channel.LastRequest[4] << 8) | channel.LastRequest[5]);
+        Assert.Equal(18, channel.LastRequest[6]);
+        Assert.Equal(new byte[]
+        {
+            0x00, 0x37, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+            0x00, 0x1E, 0x00, 0x50, 0x00, 0x00, 0x30, 0xD4
+        }, channel.LastRequest[7..^2]);
+    }
+
+    [Theory]
+    [InlineData(29, 0)]
+    [InlineData(81, 0)]
+    [InlineData(30, 20001)]
+    public async Task InvalidOperatingSetpointsAreNotSent(ushort duty, ushort current)
+    {
+        var channel = new FakeChannel();
+        var client = new ControllerClient(channel, 1);
+
+        await Assert.ThrowsAsync<ArgumentOutOfRangeException>(() =>
+            client.WriteOperatingSetpointsAsync(duty, current));
+
+        Assert.Empty(channel.LastRequest);
+    }
+
     private sealed class FakeChannel : IModbusChannel
     {
         public byte[] LastRequest { get; private set; } = [];
@@ -91,6 +235,14 @@ public sealed class ControllerClientTests
                 : request;
             return Task.FromResult(response);
         }
+
+        public ValueTask DisposeAsync() => ValueTask.CompletedTask;
+    }
+
+    private sealed class TimeoutChannel : IModbusChannel
+    {
+        public Task<byte[]> TransceiveAsync(byte[] request, int responseLength, CancellationToken cancellationToken) =>
+            Task.FromException<byte[]>(new TimeoutException("timed out"));
 
         public ValueTask DisposeAsync() => ValueTask.CompletedTask;
     }

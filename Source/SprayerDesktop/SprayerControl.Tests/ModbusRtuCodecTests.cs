@@ -49,4 +49,51 @@ public sealed class ModbusRtuCodecTests
         Assert.Throws<ModbusProtocolException>(() =>
             ModbusRtuCodec.ParseReadHoldingRegisters(response, 1, 1));
     }
+
+    [Fact]
+    public void ParsesTypedIllegalAddressExceptionWithoutLocalizedMessageInspection()
+    {
+        byte[] response = ModbusRtuCodec.WithCrc([0x01, 0x83, 0x02]);
+
+        ModbusProtocolException exception = Assert.Throws<ModbusProtocolException>(() =>
+            ModbusRtuCodec.ParseReadHoldingRegisters(response, 1, 2));
+
+        Assert.Equal((byte)0x02, exception.ExceptionCode);
+    }
+
+    [Fact]
+    public void PreservesTypedExceptionCodeForSingleRegisterWriteException()
+    {
+        byte[] request = ModbusRtuCodec.BuildWriteSingleRegister(1, 0x000C, 0x00A5);
+        byte[] response = ModbusRtuCodec.WithCrc([0x01, 0x86, 0x02]);
+
+        ModbusProtocolException exception = Assert.Throws<ModbusProtocolException>(() =>
+            ModbusRtuCodec.ValidateWriteResponse(response, request));
+
+        Assert.Equal((byte)0x02, exception.ExceptionCode);
+    }
+
+    [Fact]
+    public void RejectsNonFiveByteExceptionFramesWithoutExposingAnExceptionCode()
+    {
+        foreach (byte[] response in new[]
+        {
+            ModbusRtuCodec.WithCrc([0x01, 0x83]),
+            ModbusRtuCodec.WithCrc([0x01, 0x83, 0x02, 0x00])
+        })
+        {
+            ModbusProtocolException exception = Assert.Throws<ModbusProtocolException>(() =>
+                ModbusRtuCodec.ParseReadHoldingRegisters(response, 1, 2));
+
+            Assert.Null(exception.ExceptionCode);
+        }
+    }
+
+    [Theory]
+    [InlineData(new byte[] { 0x01, 0x03 }, 9, 9)]
+    [InlineData(new byte[] { 0x01, 0x83 }, 9, 5)]
+    public void DeterminesNormalAndExceptionResponseLengths(byte[] header, int requestedLength, int expectedLength)
+    {
+        Assert.Equal(expectedLength, ModbusRtuCodec.DetermineResponseLength(header, requestedLength));
+    }
 }
