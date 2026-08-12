@@ -55,4 +55,10 @@ The record remains 24 bytes and half-word aligned, with the existing header and 
 | 3 | Legacy modes only; derive mask from mode after CRC validation | Ignored |
 | 4 | Legacy modes require their derived masks; Custom accepts any 8-bit value | Effective mask |
 
+## Release 1.0.0 pairing
+
+The paired desktop and firmware release is generated from source commit `be19ee618c9a80a9718147ff760b416972c05502` before packaging. The expected controller identity is firmware version `0x0202`, protocol version `2`, feature flags `0x0001`, and explicit commanded-mask holding register `0x000C`. The desktop may still connect to documented legacy firmware only through a valid Modbus illegal-address (`0x02`) capability response; that compatibility fallback is not the packaged release contract.
+
+`Release/Firmware/SprayerController.elf`, `.hex`, and `.bin` come only from the fresh ARM Release build. The desktop package is `Release/Desktop/` for `win-x64`, framework-dependent .NET 8 Windows. Neither artifact set implies that a target was flashed or that spraying hardware was energized.
+
 Header, schema, payload size, CRC, persistence byte, or configuration validation failures restore complete defaults: AllGroups, mask 0xFF, duty 30, bounds 30..80, persistence off, target current 0.

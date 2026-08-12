@@ -26,3 +26,10 @@
 - Firmware status must continue to report actual output mask. Flash does not contain the host calibration table.
 - Settings contains only confirmed functionality: PWM lower bound, safety minimum, ten-point calibration, curve preview, local save, and clearly separated confirmed save-as-power-on-default behavior.
 - A release pairs desktop and firmware versions with checksums. Hardware flashing and real-controller acceptance remain separate from this baseline task.
+
+## Release acceptance
+
+- Release `1.0.0` is a paired package: `Release/Desktop/` is a `win-x64`, framework-dependent publish and `Release/Firmware/` contains only the `.elf`, `.hex`, and `.bin` produced by its fresh ARM Release build.
+- The pair requires firmware `0x0202` with protocol version `2` and explicit-nozzle feature bit `0x0001`; the desktop retains the documented illegal-address-only legacy fallback but the packaged pair is protocol v2.
+- `Release/SHA256SUMS.txt` must cover every package file except itself using ASCII SHA-256 entries and forward-slash project-relative paths. Each listed hash must verify before handoff.
+- Automated demo acceptance and exact-pixel review are release evidence only. Hardware flashing, serial-controller, physical-touch and spraying-output acceptance require separate authorized on-site validation and must never be inferred from this package.

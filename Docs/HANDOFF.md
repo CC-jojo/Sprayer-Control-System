@@ -60,3 +60,13 @@ When recreating a baseline, first run Tools/tests/Initialize-SourceCopies.Tests.
 - `MainWindow` starts full-bleed/maximized by default. Use `--demo --windowed --width 1366 --height 768` for hardware-free interaction and `--demo --capture --width 1366 --height 768` for capture tooling.
 - `Tools/Capture-UIReview.ps1` produces the six required PNG names under ignored `Temp/UIReview` and validates their PNG dimensions. See `Docs/superpowers/sdd/task-7-report.md` for the exact hashes and the local high-DPI capture limitation.
 - `DashboardView`, `SettingsView`, and `LogView` are native WPF views. Settings is intentionally usable with a disconnected controller; local save updates the active dashboard without restart. Demo calibration is visibly marked and never saved as a product default.
+
+## Release 1.0.0 and first migration command
+
+The first command after copying or cloning this project on a new account/computer is, from the project root:
+
+    Get-Content -Raw .\AGENTS.md
+
+Then read `PROJECT_CONTEXT.md`, run `git status --short --branch`, and use `git rev-parse HEAD` to identify the local committed state. The portable release is `Release/`: `Desktop/` is a framework-dependent .NET 8 `win-x64` publish; `Firmware/` contains the freshly built `SprayerController.elf`, `.hex`, and `.bin`; `VERSION.txt` is `1.0.0`; and `SHA256SUMS.txt` verifies every release file except itself.
+
+Release `1.0.0` pairs source commit `be19ee618c9a80a9718147ff760b416972c05502`, firmware `0x0202`, protocol v2 and feature flag `0x0001`. Install .NET 8 Windows Desktop Runtime on the target PC before launching `Release/Desktop/SprayerControl.App.exe`. Do not invoke the firmware `flash` target or energize outputs without separately authorized physical safety setup. Physical serial controller, touchscreen, STM32 flashing and spraying-output acceptance remain pending.

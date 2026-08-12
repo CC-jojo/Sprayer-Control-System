@@ -43,6 +43,7 @@ The initialization command below is for a fresh bootstrap or deliberate recreati
     cmake --fresh --preset Release
     cmake --build --preset Release --target clean
     cmake --build --preset Release
+    ctest --test-dir Source/SprayerController/build/Release --output-on-failure
 
 ### Task 3 evidence (no hardware flashing)
 
@@ -91,3 +92,34 @@ The initialization script intentionally refuses non-empty Source/SprayerDesktop 
 - Full desktop Release tests: 166/166 passed.
 - Release build: 0 warnings, 0 errors. `git diff --check` completed successfully.
 - Task 7 owns replacement of the legacy MainWindow and therefore the final three-column/full-bleed/no-main-screen-TextBox assertions and visual-resolution review.
+
+## Task 8 paired release evidence
+
+Release `1.0.0` packages desktop and firmware built from source commit `be19ee618c9a80a9718147ff760b416972c05502` before release packaging. It contains `Release/Desktop/`, `Release/Firmware/`, `Release/VERSION.txt`, `Release/RELEASE_NOTES_CN.md`, and `Release/SHA256SUMS.txt`.
+
+    dotnet test Source/SprayerDesktop/SprayerControl.sln --configuration Release --no-restore
+    dotnet restore Source/SprayerDesktop/SprayerControl.App/SprayerControl.App.csproj --runtime win-x64
+    dotnet publish Source/SprayerDesktop/SprayerControl.App/SprayerControl.App.csproj --configuration Release --runtime win-x64 --self-contained false --no-restore --output Release/Desktop
+
+- Desktop Release tests: 170/170 passed, 0 failed, 0 skipped.
+- Framework-dependent `win-x64` publish completed without warnings or errors.
+
+    cmd.exe /d /s /c 'call "C:\Program Files (x86)\Microsoft Visual Studio\18\BuildTools\Common7\Tools\VsDevCmd.bat" -arch=x64 && cmake -S .\Source\SprayerController\Tests -B .\Temp\firmware-host-tests-task8 -G Ninja && cmake --build .\Temp\firmware-host-tests-task8 --config Release && ctest --test-dir .\Temp\firmware-host-tests-task8 -C Release --output-on-failure'
+    powershell.exe -NoProfile -ExecutionPolicy Bypass -File Source/SprayerController/tools/tests/test-stm32-download-output.ps1
+    powershell.exe -NoProfile -ExecutionPolicy Bypass -File Source/SprayerController/tools/tests/test-stm32-download-retry.ps1
+    cmake --fresh --preset Release
+    cmake --build --preset Release --target clean
+    cmake --build --preset Release
+
+- Native MSVC CTest: 2/2 passed. Firmware PowerShell tool checks: 2/2 passed.
+- Fresh GNU Arm Embedded Toolchain 13.3.1 Release build: 35/35 Ninja steps; Flash 10540 B / 63 KB (16.34%); RAM 2072 B / 20 KB (10.12%). No `flash` target was invoked.
+- ARM CTest: 0 tests registered; `ctest` exited successfully with `No tests were found`. ARM verification is configure/compile/link only; the two native MSVC tests provide the executable firmware behavior checks.
+
+    powershell.exe -NoProfile -ExecutionPolicy Bypass -File Tools/Capture-UIReview.ps1 -Configuration Release -OutputDirectory Temp/UIReview
+
+- Six exact-pixel demo captures were regenerated at 1280x800, 1366x768, 1536x864, 1600x900, 1920x1080 and 1920x1200. The repeatable capture command verified each PNG dimension and nonzero size.
+
+    $entries = Get-Content Release/SHA256SUMS.txt | Where-Object { $_ -match '^[0-9A-F]{64}  .+$' }
+    $entries | ForEach-Object { $parts = $_ -split '  ', 2; if ((Get-FileHash -LiteralPath $parts[1] -Algorithm SHA256).Hash -ne $parts[0]) { throw "Checksum mismatch: $($parts[1])" } }
+
+- The release hash verification completed successfully. Credential-like scans over tracked source, documentation and release text found no credentials, tokens, private keys or connection strings. Physical controller, touchscreen, flash programming and spraying-output acceptance were not performed.

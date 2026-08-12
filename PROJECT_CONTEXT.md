@@ -50,3 +50,10 @@ Read `Docs/superpowers/specs/2026-08-12-sprayer-touch-hmi-design.md` before plan
 - Task 5 verification is recorded in Docs/superpowers/sdd/task-5-report.md: focused Release tests 21/21, full desktop Release tests 163/163, Release build with 0 warnings and 0 errors. No serial hardware, UI automation, or spraying hardware was used.
 - Task 6 verification is recorded in Docs/superpowers/sdd/task-6-report.md: focused layout/control Release tests 6/6, full desktop Release tests 166/166, Release build with 0 warnings and 0 errors. No serial hardware, UI automation, or spraying hardware was used.
 - Task 7 verification is recorded in Docs/superpowers/sdd/task-7-report.md: focused layout tests 7/7, full desktop Release tests 167/167, Release build with 0 warnings and 0 errors. Capture dimensions/hashes were verified; the local high-DPI visual-capture result requires a separate stable-display acceptance run.
+
+## Paired release 1.0.0
+
+- `Release/` is the portable delivery snapshot for release `1.0.0`. It pairs the framework-dependent `win-x64` desktop publish in `Release/Desktop/` with freshly compiler-built STM32 artifacts in `Release/Firmware/`.
+- Desktop and firmware source both originate from Git commit `be19ee618c9a80a9718147ff760b416972c05502` before release packaging. The compatible protocol expectation is firmware `0x0202`, protocol version `2`, explicit-nozzle feature bit `0x0001`, and explicit mask register `0x000C`.
+- `Release/SHA256SUMS.txt` is ASCII, uses forward-slash paths relative to the project root, and covers every release file except itself. Verify it from the project root with the command recorded in `Docs/PROGRESS.md`.
+- Task 8 verification and release limitations are recorded in `Docs/superpowers/sdd/task-8-report.md`. Physical controller, touchscreen, STM32 flashing and spraying-output acceptance are deliberately not claimed by this package.
