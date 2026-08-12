@@ -42,3 +42,11 @@ When recreating a baseline, first run Tools/tests/Initialize-SourceCopies.Tests.
 - The store creates and flushes a same-directory unique `.tmp` file. Existing targets use `File.Replace`; new targets use same-directory `File.Move`. A failed/cancelled save removes the temporary file and leaves the old target intact.
 - `DashboardViewModel` uses controller status output-mask readback as confirmed nozzle state. Mask targets are derived only after its shared session gate is acquired, so queued operations compose from the latest readback. Setpoint commit snapshots duty/opening together inside that same gate, sends exactly that mapped pair, and promotes exactly that snapshot; a later local preview remains unconfirmed for a later commit.
 - `SettingsViewModel` starts with no invented calibration values. It needs exactly ten 10..100-point currents before it can save a new immutable schema-1 configuration with a UTC timestamp. `LogViewModel` retains all records and exposes a live newest-five view.
+
+## Task 6 WPF control checkpoint
+
+- `App.xaml` merges `Themes/Colors.xaml` then `Themes/Controls.xaml`. Reuse the stable HMI brush/style keys rather than introducing inline palette values in controls or views.
+- `Controls/NozzleArrayControl` exposes confirmed and preview byte masks, pending state, and an `ICommand`; button parameters are `NozzleCommandParameter` values with one-based `Group` and `Right` members. The fixed bit mapping remains even=left and odd=right.
+- `Controls/SegmentedGaugeControl` previews locally while dragged and calls `ReleaseCommand` once only after a completed mouse or touch gesture. Lost capture cancels without a command.
+- `Controls/TouchNumericKeypad` is touch-only: it displays a sanitized decimal string and exposes confirm/cancel commands; it contains no text-entry control or physical-input handler.
+- Task 6 intentionally leaves the legacy MainWindow untouched. Task 7 must compose the controls into the approved responsive full-bleed three-column dashboard/settings/log views and perform visual-resolution review.

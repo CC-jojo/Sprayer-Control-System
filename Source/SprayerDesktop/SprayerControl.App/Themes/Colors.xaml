@@ -1,0 +1,16 @@
+<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <SolidColorBrush x:Key="HmiBackgroundBrush" Color="#10181F" />
+    <SolidColorBrush x:Key="HmiPanelBrush" Color="#17242D" />
+    <SolidColorBrush x:Key="HmiRaisedPanelBrush" Color="#223640" />
+    <SolidColorBrush x:Key="HmiBorderBrush" Color="#3D5966" />
+    <SolidColorBrush x:Key="HmiTextBrush" Color="#EEF7F8" />
+    <SolidColorBrush x:Key="HmiMutedTextBrush" Color="#7C939C" />
+    <SolidColorBrush x:Key="HmiCyanBrush" Color="#31D7E8" />
+    <SolidColorBrush x:Key="HmiGreenBrush" Color="#4CCD82" />
+    <SolidColorBrush x:Key="HmiAmberBrush" Color="#F2A43A" />
+    <SolidColorBrush x:Key="HmiRedBrush" Color="#E85B5B" />
+    <SolidColorBrush x:Key="HmiDisabledOverlayBrush" Color="#80304048" />
+    <SolidColorBrush x:Key="HmiFocusOverlayBrush" Color="#8031D7E8" />
+    <SolidColorBrush x:Key="HmiPendingOverlayBrush" Color="#8047C8FF" />
+</ResourceDictionary>

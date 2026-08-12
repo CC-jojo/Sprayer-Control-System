@@ -13,7 +13,7 @@ Do not modify, move, rename, or delete these baselines. Editable copies will be 
 
 ## Current phase
 
-Tasks 3 through 5 are complete in local task commits. Firmware exposes protocol-v2 explicit eight-nozzle control at 0x000C and capabilities at 0x010A..0x010B. The desktop now detects those capabilities with illegal-address-only legacy fallback, writes explicit masks and atomic operating setpoints, handles five-byte serial exception frames, exposes hardware/demo controller sessions, atomically persists schema-1 host configuration, and provides deterministic dashboard/settings/log ViewModels. Task 6 remains the WPF visual layer.
+Tasks 3 through 6 are complete in local task commits. Firmware exposes protocol-v2 explicit eight-nozzle control at 0x000C and capabilities at 0x010A..0x010B. The desktop now detects those capabilities with illegal-address-only legacy fallback, writes explicit masks and atomic operating setpoints, handles five-byte serial exception frames, exposes hardware/demo controller sessions, atomically persists schema-1 host configuration, provides deterministic dashboard/settings/log ViewModels, and provides reusable native-WPF theme resources, nozzle-array, segmented-gauge, and touch-numeric-keypad controls. Task 7 integrates those controls into the final views.
 
 ## Baseline checkpoint and migration
 
@@ -48,3 +48,4 @@ Read `Docs/superpowers/specs/2026-08-12-sprayer-touch-hmi-design.md` before plan
 - Task 3 verification is recorded in Docs/superpowers/sdd/task-3-report.md: native MSVC CTest, both existing firmware PowerShell tests, and a fresh compiler-backed ARM Release build completed without flashing hardware.
 - Task 4 verification is recorded in Docs/superpowers/sdd/task-4-report.md: focused Release tests 40/40, full desktop Release tests 135/135, Release build with 0 warnings and 0 errors. No serial hardware or spraying hardware was used.
 - Task 5 verification is recorded in Docs/superpowers/sdd/task-5-report.md: focused Release tests 21/21, full desktop Release tests 163/163, Release build with 0 warnings and 0 errors. No serial hardware, UI automation, or spraying hardware was used.
+- Task 6 verification is recorded in Docs/superpowers/sdd/task-6-report.md: focused layout/control Release tests 6/6, full desktop Release tests 166/166, Release build with 0 warnings and 0 errors. No serial hardware, UI automation, or spraying hardware was used.

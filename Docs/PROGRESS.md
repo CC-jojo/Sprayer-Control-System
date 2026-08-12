@@ -14,14 +14,16 @@
 - Task 4 added cached Modbus and deterministic demo controller sessions. The demo keeps commanded mask separate from PWM-gated actual readback, supports cancellation and one-shot failure injection, and is disposable.
 - Task 5 added schema-1 validated host-local JSON persistence. Saves serialize on a store instance, flush a unique same-directory UTF-8 temporary file, then atomically replace/move; failures and cancellation clean the temporary file without changing the preceding target.
 - Task 5 added observable/async-command, complete-plus-recent-five logging, dashboard preview/pending/confirmed state, and settings editing. Dashboard nozzle state is refreshed from controller output-mask readback; setpoint changes remain local until commit and map calibration mA to microamps with midpoint-away-from-zero rounding.
+- Task 6 added merged dark-HMI resource dictionaries, shared cards/headings/touch-status/focus-disabled-pending styles, and native reusable nozzle-array, segmented-gauge, and touch-only numeric-keypad controls. These controls are not yet inserted into MainWindow or final views.
+- Task 6 review remediation renders pending nozzle state from the complete preview target, blocks duplicate nozzle/gauge interactions while pending, clamps gauge preview/release to the configured safety floor, and adds dynamic Chinese automation semantics to nozzles and gauges.
 
 ## Current
 
-Desktop local configuration and interaction state are ready for Task 6 WPF views/styles. Hardware flashing, serial-device verification, UI automation, and physical-output acceptance have not been performed.
+Desktop local configuration, interaction state, and reusable WPF controls are ready for Task 7 view integration. Hardware flashing, serial-device verification, UI automation, and physical-output acceptance have not been performed.
 
 ## Next
 
-1. Implement the responsive WPF dashboard and settings views bound to the Task 5 ViewModels.
+1. Implement the responsive WPF dashboard, settings, and full-log views bound to the Task 5 ViewModels and Task 6 reusable controls.
 2. Perform separately authorized real-controller acceptance after the UI is integrated.
 
 ## Verification commands
@@ -75,3 +77,16 @@ The initialization script intentionally refuses non-empty Source/SprayerDesktop 
 - Focused Release tests: 21/21 passed.
 - Full desktop Release tests: 163/163 passed.
 - Release build: 0 warnings, 0 errors. `git diff --check` completed successfully.
+
+### Task 6 evidence (no serial/UI/hardware)
+
+    dotnet test Source/SprayerDesktop/SprayerControl.Tests/SprayerControl.Tests.csproj --configuration Release --filter 'FullyQualifiedName~MainWindowLayoutTests'
+    dotnet build Source/SprayerDesktop/SprayerControl.sln --configuration Release
+    dotnet test Source/SprayerDesktop/SprayerControl.sln --configuration Release
+    git diff --check
+
+- RED: the two new resource/control invariant tests failed with expected missing `Themes/Colors.xaml` and `Controls/NozzleArrayControl.xaml` paths before product files were created.
+- Focused Release layout/control tests: 6/6 passed.
+- Full desktop Release tests: 166/166 passed.
+- Release build: 0 warnings, 0 errors. `git diff --check` completed successfully.
+- Task 7 owns replacement of the legacy MainWindow and therefore the final three-column/full-bleed/no-main-screen-TextBox assertions and visual-resolution review.
