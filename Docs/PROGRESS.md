@@ -12,16 +12,17 @@
 - Task 3 preserves legacy mode masks and existing register behavior, adds Flash schema v4 while decoding schema v3, and keeps 0x0108 as physical PWM-gated output readback.
 - Task 4 added desktop protocol-v2 capability detection, explicit-mask and atomic operating-setpoint writes, typed Modbus exception codes, and five-byte serial exception-frame handling.
 - Task 4 added cached Modbus and deterministic demo controller sessions. The demo keeps commanded mask separate from PWM-gated actual readback, supports cancellation and one-shot failure injection, and is disposable.
+- Task 5 added schema-1 validated host-local JSON persistence. Saves serialize on a store instance, flush a unique same-directory UTF-8 temporary file, then atomically replace/move; failures and cancellation clean the temporary file without changing the preceding target.
+- Task 5 added observable/async-command, complete-plus-recent-five logging, dashboard preview/pending/confirmed state, and settings editing. Dashboard nozzle state is refreshed from controller output-mask readback; setpoint changes remain local until commit and map calibration mA to microamps with midpoint-away-from-zero rounding.
 
 ## Current
 
-Desktop protocol-v2 integration is ready for Task 5 local configuration and interaction ViewModels. Hardware flashing, serial-device verification, and physical-output acceptance have not been performed.
+Desktop local configuration and interaction state are ready for Task 6 WPF views/styles. Hardware flashing, serial-device verification, UI automation, and physical-output acceptance have not been performed.
 
 ## Next
 
-1. Introduce host-local calibration validation, atomic persistence and return-valve mapping.
-2. Implement the responsive WPF dashboard and settings views with controller-confirmed state transitions.
-3. Perform separately authorized real-controller acceptance after the UI is integrated.
+1. Implement the responsive WPF dashboard and settings views bound to the Task 5 ViewModels.
+2. Perform separately authorized real-controller acceptance after the UI is integrated.
 
 ## Verification commands
 
@@ -60,4 +61,17 @@ The initialization script intentionally refuses non-empty Source/SprayerDesktop 
 - RED was recorded before product edits: the new session test failed to compile with expected `CS0234` because `SprayerControl.App.Services` did not yet exist.
 - Focused Release tests: 40/40 passed.
 - Full desktop Release tests: 135/135 passed.
+- Release build: 0 warnings, 0 errors. `git diff --check` completed successfully.
+
+### Task 5 evidence (no serial/UI/hardware)
+
+    dotnet test Source/SprayerDesktop/SprayerControl.Tests/SprayerControl.Tests.csproj --configuration Release --filter 'FullyQualifiedName~JsonHostConfigurationStoreTests|FullyQualifiedName~DashboardViewModelTests|FullyQualifiedName~SettingsViewModelTests|FullyQualifiedName~LogViewModelTests'
+    dotnet test Source/SprayerDesktop/SprayerControl.sln --configuration Release
+    dotnet build Source/SprayerDesktop/SprayerControl.sln --configuration Release
+    git diff --check
+
+- RED: new Task 5 tests failed to compile with expected `CS0234` because the ViewModels namespace and configuration-store interface did not exist.
+- Review RED: schema-validation regression failed 1/1 because the `InvalidDataException` did not preserve an inner cause.
+- Focused Release tests: 21/21 passed.
+- Full desktop Release tests: 163/163 passed.
 - Release build: 0 warnings, 0 errors. `git diff --check` completed successfully.
