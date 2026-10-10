@@ -3,41 +3,54 @@
  xmlns:controls="clr-namespace:SprayerControl.App.Controls" Background="{DynamicResource HmiBackgroundBrush}">
 <Grid Margin="18"><Grid.RowDefinitions><RowDefinition Height="58"/><RowDefinition Height="*"/></Grid.RowDefinitions>
  <Grid><TextBlock Text="设置" Style="{StaticResource HmiHeadingStyle}" FontSize="28" VerticalAlignment="Center"/><Button Content="返回主界面" Style="{StaticResource TouchButtonStyle}" HorizontalAlignment="Right" Click="Back_Click"/></Grid>
- <!-- 设置项较多：主区与底部三段一起放进滚动区，保证在 1080 设计高度下也能完整查看。 -->
+ <!-- 设置项较多：主区与底部两块一起放进滚动区，保证在 1080 设计高度下也能完整查看。 -->
  <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto"><StackPanel>
   <Grid><Grid.ColumnDefinitions><ColumnDefinition Width="30*"/><ColumnDefinition Width="38*"/><ColumnDefinition Width="32*"/></Grid.ColumnDefinitions>
    <StackPanel Margin="0,0,10,0">
-    <Border Style="{StaticResource HmiCardStyle}"><StackPanel><TextBlock Text="PWM占空比下限" Style="{StaticResource HmiHeadingStyle}"/><TextBlock x:Name="PwmValue" FontSize="30" Foreground="{DynamicResource HmiCyanBrush}" Margin="0,6"/><Grid><Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition/></Grid.ColumnDefinitions><Button Content="−" FontSize="24" Style="{StaticResource TouchButtonStyle}" Margin="0,0,5,0" Click="DecreasePwm_Click"/><Button Grid.Column="1" Content="＋" FontSize="24" Style="{StaticResource TouchButtonStyle}" Margin="5,0,0,0" Click="IncreasePwm_Click"/></Grid></StackPanel></Border>
-    <Border Style="{StaticResource HmiCardStyle}" Margin="0,10,0,0"><StackPanel><TextBlock Text="回流阀安全下限" Style="{StaticResource HmiHeadingStyle}"/><TextBlock x:Name="SafetyValue" FontSize="30" Foreground="{DynamicResource HmiAmberBrush}" Margin="0,6"/><Grid><Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition/></Grid.ColumnDefinitions><Button Content="−" FontSize="24" Style="{StaticResource TouchButtonStyle}" Margin="0,0,5,0" Click="DecreaseSafety_Click"/><Button Grid.Column="1" Content="＋" FontSize="24" Style="{StaticResource TouchButtonStyle}" Margin="5,0,0,0" Click="IncreaseSafety_Click"/></Grid><Button x:Name="ConfirmSafetyButton" Content="确认安全下限修改" Style="{StaticResource TouchButtonStyle}" BorderBrush="{DynamicResource HmiAmberBrush}" Margin="0,10,0,0" Click="ConfirmSafety_Click"/></StackPanel></Border>
-    <TextBlock x:Name="ResultText" Foreground="{DynamicResource HmiAmberBrush}" TextWrapping="Wrap" Margin="4,10"/>
+    <Border Style="{StaticResource HmiCardStyle}"><StackPanel><TextBlock Text="PWM占空比下限" Style="{StaticResource HmiHeadingStyle}"/><TextBlock x:Name="PwmValue" FontSize="26" Foreground="{DynamicResource HmiCyanBrush}" Margin="0,4"/><Grid><Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition/></Grid.ColumnDefinitions><Button Content="−" FontSize="24" Style="{StaticResource TouchButtonStyle}" Margin="0,0,5,0" Click="DecreasePwm_Click"/><Button Grid.Column="1" Content="＋" FontSize="24" Style="{StaticResource TouchButtonStyle}" Margin="5,0,0,0" Click="IncreasePwm_Click"/></Grid></StackPanel></Border>
+    <!-- 回流阀卡片：上半为安全下限，下半并入上电默认回流阀（同属回流阀参数）。 -->
+    <Border Style="{StaticResource HmiCardStyle}" Margin="0,6,0,0"><StackPanel>
+     <TextBlock Text="回流阀安全下限" Style="{StaticResource HmiHeadingStyle}"/>
+     <TextBlock x:Name="SafetyValue" FontSize="26" Foreground="{DynamicResource HmiAmberBrush}" Margin="0,4"/>
+     <!-- 加减与「确认安全下限修改」同一行，右侧确认按钮铺满剩余宽度。 -->
+     <Grid><Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+      <Button Content="−" FontSize="24" Width="64" Style="{StaticResource TouchButtonStyle}" Click="DecreaseSafety_Click"/>
+      <Button Grid.Column="1" Content="＋" FontSize="24" Width="64" Style="{StaticResource TouchButtonStyle}" Margin="8,0,0,0" Click="IncreaseSafety_Click"/>
+      <Button Grid.Column="2" x:Name="ConfirmSafetyButton" Content="确认安全下限修改" Style="{StaticResource TouchButtonStyle}" BorderBrush="{DynamicResource HmiAmberBrush}" Margin="12,0,0,0" Click="ConfirmSafety_Click"/>
+     </Grid>
+     <!-- 上电默认回流阀：打开则上电与启动都调到设定开度，关闭则继承上次开度。 -->
+     <Border BorderBrush="{DynamicResource HmiBorderBrush}" BorderThickness="0,1,0,0" Margin="0,8,0,0" Padding="0,8,0,0">
+      <StackPanel>
+       <Grid><Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions><TextBlock Text="上电默认回流阀" Style="{StaticResource HmiHeadingStyle}"/><TextBlock Grid.Column="1" Text="≥ 安全下限" Foreground="{DynamicResource HmiMutedTextBrush}" FontSize="13" VerticalAlignment="Center"/></Grid>
+       <Grid Margin="0,4,0,0"><Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+        <TextBlock x:Name="PowerOnOpeningValue" Text="100%" FontSize="24" Foreground="{DynamicResource HmiAmberBrush}" VerticalAlignment="Center" MinWidth="92"/>
+        <Button x:Name="PowerOnToggleButton" Grid.Column="1" Content="继承上次开度" MinHeight="64" Style="{StaticResource StatusButtonStyle}" Margin="8,0" Click="TogglePowerOn_Click"/>
+        <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center"><Button Content="−" FontSize="22" Width="58" Style="{StaticResource TouchButtonStyle}" Margin="0,0,4,0" Click="DecreasePowerOn_Click"/><Button Content="＋" FontSize="22" Width="58" Style="{StaticResource TouchButtonStyle}" Margin="4,0,0,0" Click="IncreasePowerOn_Click"/></StackPanel>
+       </Grid>
+      </StackPanel>
+     </Border>
+    </StackPanel></Border>
+    <TextBlock x:Name="ResultText" Foreground="{DynamicResource HmiAmberBrush}" TextWrapping="Wrap" Margin="4,6"/>
    </StackPanel>
 
    <Border Grid.Column="1" Style="{StaticResource HmiCardStyle}" Margin="0,0,10,0"><Grid><Grid.RowDefinitions><RowDefinition Height="34"/><RowDefinition Height="*"/><RowDefinition Height="Auto"/></Grid.RowDefinitions><TextBlock Text="十点开度 / 电流标定（mA）" Style="{StaticResource HmiHeadingStyle}"/><UniformGrid Grid.Row="1" x:Name="CalibrationGrid" Columns="2" Margin="0,8"/><TextBlock Grid.Row="2" Text="触摸任一点打开数字键盘；10% 至 100% 按十点分段线性插值。" Foreground="{DynamicResource HmiMutedTextBrush}" TextWrapping="Wrap"/></Grid></Border>
 
+   <!-- 曲线图限制最大高度，避免右列按列宽等比放大后把整页顶高。 -->
    <Grid Grid.Column="2"><Grid.RowDefinitions><RowDefinition Height="*"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
-    <Border Style="{StaticResource HmiCardStyle}"><Grid><Grid.RowDefinitions><RowDefinition Height="34"/><RowDefinition Height="*"/><RowDefinition Height="44"/></Grid.RowDefinitions><TextBlock Text="标定曲线预览" Style="{StaticResource HmiHeadingStyle}"/><Viewbox Grid.Row="1" Stretch="Uniform"><Canvas x:Name="CurveCanvas" Width="340" Height="260" Background="{DynamicResource HmiBackgroundBrush}"><Line X1="36" Y1="18" X2="36" Y2="228" Stroke="{DynamicResource HmiBorderBrush}" StrokeThickness="2"/><Line X1="36" Y1="228" X2="322" Y2="228" Stroke="{DynamicResource HmiBorderBrush}" StrokeThickness="2"/><Polyline x:Name="CurveLine" Stroke="{DynamicResource HmiCyanBrush}" StrokeThickness="3"/><TextBlock Canvas.Left="4" Canvas.Top="8" Text="mA" Foreground="{DynamicResource HmiMutedTextBrush}"/><TextBlock Canvas.Left="284" Canvas.Top="232" Text="开度%" Foreground="{DynamicResource HmiMutedTextBrush}"/></Canvas></Viewbox><TextBlock Grid.Row="2" x:Name="MappedCurrentText" Text="安全下限映射电流：-- mA" Foreground="{DynamicResource HmiCyanBrush}" FontSize="16" VerticalAlignment="Center"/></Grid></Border>
+    <Border Style="{StaticResource HmiCardStyle}"><Grid><Grid.RowDefinitions><RowDefinition Height="34"/><RowDefinition Height="*"/><RowDefinition Height="44"/></Grid.RowDefinitions><TextBlock Text="标定曲线预览" Style="{StaticResource HmiHeadingStyle}"/><Viewbox Grid.Row="1" Stretch="Uniform" MaxHeight="380"><Canvas x:Name="CurveCanvas" Width="340" Height="260" Background="{DynamicResource HmiBackgroundBrush}"><Line X1="36" Y1="18" X2="36" Y2="228" Stroke="{DynamicResource HmiBorderBrush}" StrokeThickness="2"/><Line X1="36" Y1="228" X2="322" Y2="228" Stroke="{DynamicResource HmiBorderBrush}" StrokeThickness="2"/><Polyline x:Name="CurveLine" Stroke="{DynamicResource HmiCyanBrush}" StrokeThickness="3"/><TextBlock Canvas.Left="4" Canvas.Top="8" Text="mA" Foreground="{DynamicResource HmiMutedTextBrush}"/><TextBlock Canvas.Left="284" Canvas.Top="232" Text="开度%" Foreground="{DynamicResource HmiMutedTextBrush}"/></Canvas></Viewbox><TextBlock Grid.Row="2" x:Name="MappedCurrentText" Text="安全下限映射电流：-- mA" Foreground="{DynamicResource HmiCyanBrush}" FontSize="16" VerticalAlignment="Center"/></Grid></Border>
     <controls:TouchNumericKeypad x:Name="Keypad" Grid.RowSpan="2" Margin="0" Visibility="Collapsed" Panel.ZIndex="10"/>
    </Grid>
   </Grid>
 
-  <!-- 底部左：上电默认回流阀（列宽与上层「回流阀安全下限」卡片所在的 30* 列一致）；中：八路映射；右：保存配置。 -->
-  <Grid Margin="0,12,0,0"><Grid.ColumnDefinitions><ColumnDefinition Width="30*"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
-   <!-- 上电默认回流阀：打开则上电与启动都调到设定开度，关闭则继承上次开度。 -->
-   <Border Grid.Column="0" Style="{StaticResource HmiCardStyle}" Margin="0,0,10,0">
-    <StackPanel>
-     <Grid><Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions><TextBlock Text="上电默认回流阀" Style="{StaticResource HmiHeadingStyle}"/><TextBlock Grid.Column="1" Text="≥ 安全下限" Foreground="{DynamicResource HmiMutedTextBrush}" FontSize="13" VerticalAlignment="Center"/></Grid>
-     <Grid Margin="0,8,0,0"><Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
-      <TextBlock x:Name="PowerOnOpeningValue" Text="100%" FontSize="26" Foreground="{DynamicResource HmiAmberBrush}" VerticalAlignment="Center" MinWidth="96"/>
-      <Button x:Name="PowerOnToggleButton" Grid.Column="1" Content="继承上次开度" Style="{StaticResource StatusButtonStyle}" Margin="6,0" Click="TogglePowerOn_Click"/>
-      <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center"><Button Content="−" FontSize="22" Width="58" Style="{StaticResource TouchButtonStyle}" Margin="0,0,4,0" Click="DecreasePowerOn_Click"/><Button Content="＋" FontSize="22" Width="58" Style="{StaticResource TouchButtonStyle}" Margin="4,0,0,0" Click="IncreasePowerOn_Click"/></StackPanel>
-     </Grid>
-    </StackPanel>
-   </Border>
+  <!-- 底部：右侧为固定宽度的保存配置，八路映射填充剩余宽度。 -->
+  <DockPanel Margin="0,8,0,0" LastChildFill="True">
+   <!-- 保存本地配置 / 把设定值写入控制器上电默认值。 -->
+   <Border DockPanel.Dock="Right" Width="330" Style="{StaticResource HmiCardStyle}"><StackPanel><Button x:Name="SaveLocalButton" Content="保存本地配置" Style="{StaticResource StatusButtonStyle}" Click="Save_Click"/><Button x:Name="SaveControllerDefaultButton" Content="保存为上电默认值" Style="{StaticResource TouchButtonStyle}" Margin="0,6,0,0" Click="SaveControllerDefault_Click"/><TextBlock x:Name="ControllerDefaultReason" Text="控制器未连接" Foreground="{DynamicResource HmiMutedTextBrush}" TextWrapping="Wrap" Margin="0,6,0,0" FontSize="13"/></StackPanel></Border>
    <!-- 八路电磁阀开关映射：界面开关 → 实际物理电磁阀，本地保存并即时应用。 -->
-   <Border Grid.Column="1" Style="{StaticResource HmiCardStyle}" Margin="0,0,10,0">
+   <Border Style="{StaticResource HmiCardStyle}" Margin="0,0,10,0">
     <Grid><Grid.RowDefinitions><RowDefinition Height="32"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
      <Grid><TextBlock Text="八路电磁阀开关映射" Style="{StaticResource HmiHeadingStyle}"/><TextBlock Text="调整界面开关对应的实际电磁阀；保存后立即生效并本地持久化。" Foreground="{DynamicResource HmiMutedTextBrush}" HorizontalAlignment="Right" VerticalAlignment="Center"/></Grid>
-     <Grid Grid.Row="1" Margin="0,10,0,0"><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+     <Grid Grid.Row="1" Margin="0,8,0,0"><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
       <UniformGrid x:Name="MappingGrid" Columns="4" />
       <StackPanel Grid.Column="1" VerticalAlignment="Center" Margin="20,0,0,0">
        <Button Content="恢复默认映射" Style="{StaticResource TouchButtonStyle}" Click="ResetMapping_Click"/>
@@ -46,9 +59,7 @@
      </Grid>
     </Grid>
    </Border>
-   <!-- 保存本地配置 / 把设定值写入控制器上电默认值。 -->
-   <Border Grid.Column="2" Style="{StaticResource HmiCardStyle}" MinWidth="330"><StackPanel><Button x:Name="SaveLocalButton" Content="保存本地配置" Style="{StaticResource StatusButtonStyle}" Click="Save_Click"/><Button x:Name="SaveControllerDefaultButton" Content="保存为上电默认值" Style="{StaticResource TouchButtonStyle}" Margin="0,6,0,0" Click="SaveControllerDefault_Click"/><TextBlock x:Name="ControllerDefaultReason" Text="控制器未连接" Foreground="{DynamicResource HmiMutedTextBrush}" TextWrapping="Wrap" Margin="0,6,0,0" FontSize="13"/></StackPanel></Border>
-  </Grid>
+  </DockPanel>
  </StackPanel></ScrollViewer>
 </Grid>
 </UserControl>

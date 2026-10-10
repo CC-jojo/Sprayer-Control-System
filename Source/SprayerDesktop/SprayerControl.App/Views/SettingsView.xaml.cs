@@ -168,6 +168,7 @@ public partial class SettingsView : UserControl
             {
                 Orientation = Orientation.Horizontal,
                 Margin = new Thickness(4),
+                HorizontalAlignment = HorizontalAlignment.Center,
                 VerticalAlignment = VerticalAlignment.Center,
             };
             var label = new TextBlock
@@ -177,10 +178,10 @@ public partial class SettingsView : UserControl
                 FontWeight = FontWeights.SemiBold,
                 Foreground = (Brush)FindResource("HmiTextBrush"),
                 VerticalAlignment = VerticalAlignment.Center,
-                Margin = new Thickness(0, 0, 8, 0),
-                Width = 46,
+                Margin = new Thickness(0, 0, 10, 0),
+                Width = 56,
             };
-            var combo = new ComboBox { Width = 125, FontSize = 18, Tag = index };
+            var combo = new ComboBox { Width = 240, MinHeight = 56, FontSize = 18, Tag = index };
             foreach (string physicalLabel in NozzleMappingEntry.PhysicalLabels)
                 combo.Items.Add(physicalLabel);
             combo.SelectedIndex = entry.SelectedPhysicalIndex;
