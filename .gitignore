@@ -20,6 +20,7 @@ Temp/
 Source/SprayerDesktop/Publish_Release/
 SprayerTouchHMI_Demo/Publish/
 Release/Desktop/runtimes/
+Release/Desktop/Start-Demo.cmd
 
 # IDE state
 **/.idea/
