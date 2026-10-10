@@ -26,6 +26,8 @@ public partial class DashboardView : UserControl
         OpeningGauge.Minimum = 0; OpeningGauge.Maximum = 100; OpeningGauge.ReleaseCommand = new DelegateCommand(value => { if (value is double opening) viewModel.PreviewReturnOpening = opening; _ = viewModel.CommitReturnOpeningAsync(); });
         OpeningGauge.StepDownCommand = new DelegateCommand(_ => StepOpening(-1));
         OpeningGauge.StepUpCommand = new DelegateCommand(_ => StepOpening(1));
+        // 只有回流阀仪表绑定"安全下限"一键按钮；占空比仪表未绑定，按钮自动隐藏。
+        OpeningGauge.SafetyFloorCommand = new DelegateCommand(_ => ApplySafetyFloor());
         RecentLog.ItemsSource = viewModel.Log.RecentEntries; RefreshPresentation(demo);
     }
     private void ViewModelChanged(object? sender, PropertyChangedEventArgs e) => Dispatcher.Invoke(() => RefreshPresentation(_demo));
@@ -110,6 +112,18 @@ public partial class DashboardView : UserControl
         double target = Math.Clamp(OpeningGauge.PreviewValue + direction, OpeningGauge.SafetyMinimum, OpeningGauge.Maximum);
         _viewModel.PreviewReturnOpening = target;
         _ = _viewModel.CommitReturnOpeningAsync();
+    }
+
+    /* 安全下限按钮：一键把回流阀开度切到安全下限。
+       只有回流阀仪表绑定该命令，占空比仪表不绑定，按钮会自动隐藏。 */
+    private void ApplySafetyFloor()
+    {
+        if (_viewModel is null || !_viewModel.CanCommitSetpoints || _viewModel.IsSetpointCommandPending)
+        {
+            return;
+        }
+
+        _ = _viewModel.ApplySafetyFloorAsync();
     }
 }
 internal sealed class DelegateCommand(Action<object?> execute) : System.Windows.Input.ICommand { public event EventHandler? CanExecuteChanged { add { } remove { } } public bool CanExecute(object? parameter) => true; public void Execute(object? parameter) => execute(parameter); }

@@ -286,6 +286,29 @@ public sealed class DashboardViewModel : ObservableObject
 
     public Task CommitReturnOpeningAsync(CancellationToken cancellationToken = default) => CommitSetpointsAsync(cancellationToken);
 
+    /* 一键切换到安全下限：上电默认值为 100% 全开（安全位），但实际作业时全开会导致管路压力上不去，
+       因此提供该按钮把回流阀开度直接拉到安全下限。已经在安全下限时不重复下发，只记一条日志。 */
+    public async Task ApplySafetyFloorAsync(CancellationToken cancellationToken = default)
+    {
+        if (_configuration is null)
+        {
+            RejectSetpointInput(MissingCalibrationMessage);
+            return;
+        }
+
+        double safetyFloor = _configuration.ReturnValveSafetyMinimum;
+        if (Math.Abs(PreviewReturnOpening - safetyFloor) < 0.5)
+        {
+            _log.Add($"回流阀开度已在安全下限 {safetyFloor:F0}%，无需调整。");
+            return;
+        }
+
+        SetPreviewReturnOpeningValue(safetyFloor);
+        _setpointInputInvalid = false;
+        ErrorText = string.Empty;
+        await CommitReturnOpeningAsync(cancellationToken);
+    }
+
     private async Task SendMaskAsync(Func<NozzleMask, NozzleMask> deriveTarget, CancellationToken cancellationToken)
     {
         if (!Capabilities.SupportsExplicitNozzleMask)

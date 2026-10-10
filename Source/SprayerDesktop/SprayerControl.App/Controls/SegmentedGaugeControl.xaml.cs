@@ -38,6 +38,9 @@ public partial class SegmentedGaugeControl : UserControl
     public static readonly DependencyProperty StepUpCommandProperty = DependencyProperty.Register(
         nameof(StepUpCommand), typeof(ICommand), typeof(SegmentedGaugeControl));
 
+    public static readonly DependencyProperty SafetyFloorCommandProperty = DependencyProperty.Register(
+        nameof(SafetyFloorCommand), typeof(ICommand), typeof(SegmentedGaugeControl));
+
     public SegmentedGaugeControl()
     {
         InitializeComponent();
@@ -61,6 +64,8 @@ public partial class SegmentedGaugeControl : UserControl
     public ICommand? StepDownCommand { get => (ICommand?)GetValue(StepDownCommandProperty); set => SetValue(StepDownCommandProperty, value); }
 
     public ICommand? StepUpCommand { get => (ICommand?)GetValue(StepUpCommandProperty); set => SetValue(StepUpCommandProperty, value); }
+
+    public ICommand? SafetyFloorCommand { get => (ICommand?)GetValue(SafetyFloorCommandProperty); set => SetValue(SafetyFloorCommandProperty, value); }
 
     private static object CoerceMinimum(DependencyObject dependencyObject, object baseValue)
     {
@@ -125,7 +130,7 @@ public partial class SegmentedGaugeControl : UserControl
 
         double selectableMinimum = Math.Max(Minimum, SafetyMinimum);
         AutomationProperties.SetName(this, "分段调节仪表");
-        AutomationProperties.SetHelpText(this, $"范围 {Minimum:F0} 到 {Maximum:F0}；安全下限 {selectableMinimum:F0}；使用下方按钮步进调节。");
+        AutomationProperties.SetHelpText(this, $"范围 {Minimum:F0} 到 {Maximum:F0}；安全下限 {selectableMinimum:F0}；使用下方按钮步进调节，或按安全下限按钮一键切换。");
         AutomationProperties.SetItemStatus(this, IsPending
             ? $"等待控制器确认；预览 {PreviewValue:F0}"
             : $"当前 {Value:F0}；预览 {PreviewValue:F0}；安全下限 {selectableMinimum:F0}");

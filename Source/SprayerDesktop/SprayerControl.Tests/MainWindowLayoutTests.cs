@@ -126,7 +126,7 @@ public sealed class MainWindowLayoutTests
         Assert.DoesNotContain("CanopySelector", dashboard);
         Assert.Contains("Start-Demo.cmd", appProject);
 
-        foreach (string property in new[] { "MinimumProperty", "MaximumProperty", "ValueProperty", "PreviewValueProperty", "SafetyMinimumProperty", "IsPendingProperty", "ReleaseCommandProperty" })
+        foreach (string property in new[] { "MinimumProperty", "MaximumProperty", "ValueProperty", "PreviewValueProperty", "SafetyMinimumProperty", "IsPendingProperty", "ReleaseCommandProperty", "SafetyFloorCommandProperty" })
         {
             Assert.Contains(property, gaugeCode);
         }
@@ -139,6 +139,14 @@ public sealed class MainWindowLayoutTests
         Assert.Contains("CoercePreviewValue", gaugeCode);
         Assert.Contains("segment.Opacity = IsPending ? 0.62d : 1d", gaugeCode);
         Assert.Contains("StepDownCommand", gaugeCode);
+
+        // 安全下限按钮：位于减号与加号之间、数字圆盘下方，只在绑定命令的仪表上显示。
+        Assert.Contains("SafetyFloorButton", gauge);
+        Assert.Contains("Content=\"安全下限\"", gauge);
+        Assert.Contains("HorizontalAlignment=\"Center\"", gauge);
+        Assert.Contains("OpeningGauge.SafetyFloorCommand", dashboardCode);
+        Assert.Contains("ApplySafetyFloor", dashboardCode);
+        Assert.Contains("ApplySafetyFloorAsync", dashboardCode);
         Assert.Contains("AutomationProperties.SetName", gaugeCode);
         Assert.Contains("AutomationProperties.SetHelpText", gaugeCode);
         Assert.Contains("AutomationProperties.SetItemStatus", gaugeCode);
@@ -155,6 +163,26 @@ public sealed class MainWindowLayoutTests
         Assert.DoesNotContain("TextBox", keypad);
         Assert.DoesNotContain("KeyDown", keypadCode);
         Assert.DoesNotContain("Keyboard", keypadCode);
+    }
+
+    [Fact]
+    public void ReturnValveGaugeExposesOneTouchSafetyFloorButton()
+    {
+        string controlsDirectory = Path.Combine(GetAppDirectory(), "Controls");
+        string gauge = File.ReadAllText(Path.Combine(controlsDirectory, "SegmentedGaugeControl.xaml"));
+        string gaugeCode = File.ReadAllText(Path.Combine(controlsDirectory, "SegmentedGaugeControl.xaml.cs"));
+        string dashboardCode = File.ReadAllText(Path.Combine(GetAppDirectory(), "Views", "DashboardView.xaml.cs"));
+
+        // 控件提供可选的一键安全下限命令，按钮位于减号与加号之间、数字圆盘正下方。
+        Assert.Contains("SafetyFloorCommandProperty", gaugeCode);
+        Assert.Contains("SafetyFloorButtonStyle", gauge);
+        Assert.Contains("x:Name=\"SafetyFloorButton\"", gauge);
+        Assert.Contains("Content=\"安全下限\"", gauge);
+
+        // 只有回流阀仪表绑定该命令，占空比仪表不绑定；切换逻辑在视图模型里。
+        Assert.Contains("OpeningGauge.SafetyFloorCommand", dashboardCode);
+        Assert.DoesNotContain("DutyGauge.SafetyFloorCommand", dashboardCode);
+        Assert.Contains("ApplySafetyFloorAsync", dashboardCode);
     }
 
     [Fact]

@@ -116,6 +116,40 @@ public sealed class DashboardViewModelTests
     }
 
     [Fact]
+    public async Task SafetyFloorButtonStepsStraightToTheConfiguredFloorAndSendsOnce()
+    {
+        var session = new FakeSession { Status = Status() };
+        // 默认配置安全下限为 20%。
+        var dashboard = new DashboardViewModel(session, JsonHostConfigurationStoreTests.CreateConfiguration(), new LogViewModel());
+        dashboard.PreviewDuty = 45;
+        dashboard.PreviewReturnOpening = 80;
+        Assert.Empty(session.Setpoints);
+
+        await dashboard.ApplySafetyFloorAsync();
+
+        Assert.Equal(20, dashboard.PreviewReturnOpening);
+        Assert.Equal(20, dashboard.ConfirmedReturnOpening);
+        Assert.Equal(((ushort)45, (ushort)200), Assert.Single(session.Setpoints));
+        Assert.Contains(dashboard.Log.Entries, entry => entry.Contains("已由控制器确认"));
+    }
+
+    [Fact]
+    public async Task SafetyFloorButtonAtTheFloorOnlyLogsWithoutSending()
+    {
+        var session = new FakeSession { Status = Status() };
+        // 构造函数已把开度初始化为配置的安全下限（20%）。
+        var dashboard = new DashboardViewModel(session, JsonHostConfigurationStoreTests.CreateConfiguration(), new LogViewModel());
+        dashboard.PreviewDuty = 45;
+        Assert.Equal(20, dashboard.PreviewReturnOpening);
+
+        await dashboard.ApplySafetyFloorAsync();
+
+        Assert.Empty(session.Setpoints);
+        Assert.Equal(20, dashboard.PreviewReturnOpening);
+        Assert.Contains(dashboard.Log.Entries, entry => entry.Contains("已在安全下限") && entry.Contains("无需调整"));
+    }
+
+    [Fact]
     public async Task QueuedNozzleActionsComposeFromTheLatestConfirmedMaskInsideTheSharedGate()
     {
         var session = new QueuedSession();
