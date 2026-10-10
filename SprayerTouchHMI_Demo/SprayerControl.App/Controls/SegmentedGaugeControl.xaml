@@ -44,9 +44,9 @@
         </Style>
         <!-- 安全下限按钮：一键把开度拉到安全下限（琥珀色，与仪表安全区呼应） -->
         <Style x:Key="SafetyFloorButtonStyle" TargetType="Button">
-            <Setter Property="Height" Value="44" />
-            <Setter Property="MinWidth" Value="96" />
-            <Setter Property="FontSize" Value="15" />
+            <Setter Property="Height" Value="28" />
+            <Setter Property="MinWidth" Value="64" />
+            <Setter Property="FontSize" Value="13" />
             <Setter Property="FontWeight" Value="SemiBold" />
             <Setter Property="Foreground" Value="{DynamicResource HmiAmberBrush}" />
             <Setter Property="Background" Value="{DynamicResource HmiRaisedPanelBrush}" />
@@ -114,10 +114,7 @@
             </Canvas>
             <!-- 中间数字显示区：主数字居中；Min/Max 端值移到弧形内侧底部 -->
             <Border Width="142" Height="142" Background="{DynamicResource HmiBackgroundBrush}" BorderBrush="{DynamicResource HmiBorderBrush}" BorderThickness="2" CornerRadius="71" HorizontalAlignment="Center" VerticalAlignment="Center">
-                <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center">
-                    <TextBlock Text="{Binding PreviewValue, ElementName=Root, StringFormat={}{0:F0}%}" Foreground="{DynamicResource HmiTextBrush}" FontSize="43" FontWeight="Bold" HorizontalAlignment="Center" />
-                    <TextBlock Text="松开后发送" Foreground="{DynamicResource HmiMutedTextBrush}" FontSize="11" HorizontalAlignment="Center" />
-                </StackPanel>
+                <TextBlock Text="{Binding PreviewValue, ElementName=Root, StringFormat={}{0:F0}%}" Foreground="{DynamicResource HmiTextBrush}" FontSize="43" FontWeight="Bold" HorizontalAlignment="Center" VerticalAlignment="Center" />
             </Border>
             <!-- 端值：放在弧形内侧底部（中心圆下方、按钮上方） -->
             <TextBlock Text="{Binding Minimum, ElementName=Root, StringFormat={}{0:F0}%}" Foreground="{DynamicResource HmiMutedTextBrush}" FontSize="11" HorizontalAlignment="Left" VerticalAlignment="Bottom" Margin="2,0,0,78" />
@@ -141,7 +138,7 @@
             </Button>
             <!-- 安全下限按钮：位于减号与加号之间、数字圆盘正下方 -->
             <Button x:Name="SafetyFloorButton" Style="{StaticResource SafetyFloorButtonStyle}"
-                    HorizontalAlignment="Center" VerticalAlignment="Bottom" Margin="0,0,0,12"
+                    HorizontalAlignment="Center" VerticalAlignment="Bottom" Margin="0,0,0,24"
                     Content="安全下限"
                     Command="{Binding SafetyFloorCommand, ElementName=Root}"
                     IsEnabled="{Binding IsEnabled, ElementName=Root}" />
