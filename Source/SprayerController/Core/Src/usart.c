@@ -29,7 +29,7 @@ UART_HandleTypeDef huart1;
 UART_HandleTypeDef huart2;
 
 /* USART1 init function */
-/* USART1：连接上位机 TTL 转 RS485 模块，Modbus RTU，115200-8-N-1。 */
+/* USART1：连接上位机 TTL 转 RS485 模块，Modbus RTU，波特率由 APP_HOST_BAUD_RATE 决定（当前 38400），8-N-1。 */
 
 void MX_USART1_UART_Init(void)
 {
@@ -42,7 +42,7 @@ void MX_USART1_UART_Init(void)
 
   /* USER CODE END USART1_Init 1 */
   huart1.Instance = USART1;
-  /* 上位机链路使用较高波特率，便于快速刷新八个阀和状态参数。 */
+  /* 上位机链路波特率由 APP_HOST_BAUD_RATE 统一配置（当前 38400），与上位机串口参数保持一致。 */
   huart1.Init.BaudRate = APP_HOST_BAUD_RATE;
   huart1.Init.WordLength = UART_WORDLENGTH_8B;
   huart1.Init.StopBits = UART_STOPBITS_1;

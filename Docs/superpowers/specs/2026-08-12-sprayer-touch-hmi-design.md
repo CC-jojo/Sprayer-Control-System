@@ -42,7 +42,7 @@ Normal inactive states use restrained gray. Cyan identifies selection/adjustment
 ## 5. Eight-Nozzle Control Model
 
 - The system exposes eight real nozzle channels: four vertical groups, each with left and right nozzles.
-- Each nozzle is individually touch-selectable and its displayed state comes from controller status, not only from the last UI command.
+- The eight rings are pure status indicators: they are not individual touch controls, are never focusable or hit-testable, and their displayed state always comes from controller-confirmed status (or the canopy-height drag preview while adjusting).
 - Left-side master control affects all four left nozzles; right-side master control affects all four right nozzles.
 - Canopy-height presets remain available:
   - Group 4

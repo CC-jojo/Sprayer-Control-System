@@ -109,4 +109,62 @@ public sealed class NozzleMaskTests
         Assert.Throws<ArgumentOutOfRangeException>(() =>
             NozzleMask.ForPreset((CanopyPreset)99, leftEnabled: true, rightEnabled: true));
     }
+
+    [Theory]
+    [InlineData(0x00, 0x00)] // 全关 → 全关
+    [InlineData(0x01, 0x40)] // 界面 左一 → 物理 左四(bit6)
+    [InlineData(0x02, 0x08)] // 界面 右一 → 物理 右二(bit3)
+    [InlineData(0x04, 0x01)] // 界面 左二 → 物理 左一(bit0)
+    [InlineData(0x08, 0x80)] // 界面 右二 → 物理 右四(bit7)
+    [InlineData(0x10, 0x04)] // 界面 左三 → 物理 左二(bit2)
+    [InlineData(0x20, 0x02)] // 界面 右三 → 物理 右一(bit1)
+    [InlineData(0x40, 0x10)] // 界面 左四 → 物理 左三(bit4)
+    [InlineData(0x80, 0x20)] // 界面 右四 → 物理 右三(bit5)
+    [InlineData(0xA5, 0x63)]
+    [InlineData(0xFF, 0xFF)]
+    public void UiMaskMapsToPhysicalAndBack(int uiValue, byte physicalExpected)
+    {
+        NozzleMask ui = new((byte)uiValue);
+
+        NozzleMask physical = ui.ToPhysical();
+
+        Assert.Equal(physicalExpected, physical.Value);
+        Assert.Equal(ui, physical.ToUi());
+    }
+
+    [Fact]
+    public void PhysicalMappingMatchesTheFieldWiringTable()
+    {
+        Assert.Equal((byte)0x40, NozzleMask.None.WithNozzle(1, right: false, enabled: true).ToPhysical().Value); // 左一 → 左四
+        Assert.Equal((byte)0x01, NozzleMask.None.WithNozzle(2, right: false, enabled: true).ToPhysical().Value); // 左二 → 左一
+        Assert.Equal((byte)0x04, NozzleMask.None.WithNozzle(3, right: false, enabled: true).ToPhysical().Value); // 左三 → 左二
+        Assert.Equal((byte)0x10, NozzleMask.None.WithNozzle(4, right: false, enabled: true).ToPhysical().Value); // 左四 → 左三
+        Assert.Equal((byte)0x20, NozzleMask.None.WithNozzle(4, right: true, enabled: true).ToPhysical().Value);  // 右四 → 右三
+        Assert.Equal((byte)0x02, NozzleMask.None.WithNozzle(3, right: true, enabled: true).ToPhysical().Value);  // 右三 → 右一
+        Assert.Equal((byte)0x80, NozzleMask.None.WithNozzle(2, right: true, enabled: true).ToPhysical().Value);  // 右二 → 右四
+        Assert.Equal((byte)0x08, NozzleMask.None.WithNozzle(1, right: true, enabled: true).ToPhysical().Value);  // 右一 → 右二
+    }
+
+    [Fact]
+    public void CustomMappingDrivesBothPhysicalAndUiTransforms()
+    {
+        byte[] identity = [0, 1, 2, 3, 4, 5, 6, 7];
+
+        Assert.Equal((byte)0x05, new NozzleMask(0x05).ToPhysical(identity).Value);
+        Assert.Equal((byte)0x05, new NozzleMask(0x05).ToUi(NozzleMask.BuildInverseMap(identity)).Value);
+    }
+
+    [Fact]
+    public void MappingValidationRejectsInvalidTables()
+    {
+        Assert.Throws<ArgumentNullException>(() => NozzleMask.ValidateMapping(null!));
+        Assert.Throws<ArgumentException>(() => NozzleMask.ValidateMapping([]));
+        Assert.Throws<ArgumentException>(() => NozzleMask.ValidateMapping([0, 1, 2, 3, 4, 5, 6]));
+        Assert.Throws<ArgumentOutOfRangeException>(() => NozzleMask.ValidateMapping([0, 1, 2, 3, 4, 5, 6, 8]));
+        Assert.Throws<ArgumentException>(() => NozzleMask.ValidateMapping([0, 1, 2, 3, 4, 5, 6, 6]));
+
+        byte[] valid = [0, 1, 2, 3, 4, 5, 6, 7];
+        Assert.NotSame(valid, NozzleMask.ValidateMapping(valid));
+        Assert.Equal(valid, NozzleMask.ValidateMapping(valid));
+    }
 }

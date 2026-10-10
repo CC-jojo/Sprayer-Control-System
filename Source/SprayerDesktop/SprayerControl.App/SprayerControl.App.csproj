@@ -9,12 +9,19 @@
     <PackageReference Include="System.Management" Version="8.0.0" />
   </ItemGroup>
 
+  <ItemGroup>
+    <None Update="Start-Demo.cmd" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
   <PropertyGroup>
     <OutputType>WinExe</OutputType>
     <TargetFramework>net8.0-windows</TargetFramework>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <UseWPF>true</UseWPF>
+    <!-- DEMO 发布时用 -p:IsDemoBuild=true 切换程序集名，使 App 启动时自动识别为演示模式 -->
+    <AssemblyName Condition="'$(IsDemoBuild)' == 'true'">SprayerTouchHMI_Demo</AssemblyName>
+    <ApplicationIcon>SprayerControl.ico</ApplicationIcon>
   </PropertyGroup>
 
 </Project>

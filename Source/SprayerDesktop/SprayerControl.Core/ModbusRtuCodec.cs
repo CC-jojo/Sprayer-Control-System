@@ -70,7 +70,7 @@ public static class ModbusRtuCodec
     public static int DetermineResponseLength(ReadOnlySpan<byte> header, int requestedResponseLength)
     {
         if (header.Length < 2)
-            throw new ArgumentException("A Modbus response header must contain address and function bytes.", nameof(header));
+            throw new ArgumentException("Modbus 响应头必须包含地址和功能码字节。", nameof(header));
         if (requestedResponseLength < 5)
             throw new ArgumentOutOfRangeException(nameof(requestedResponseLength));
 
@@ -81,7 +81,7 @@ public static class ModbusRtuCodec
     {
         Validate(frame, slave, 0x03);
         if (frame.Length != 5 + count * 2 || frame[2] != count * 2)
-            throw new ModbusProtocolException("Read response length is invalid.");
+            throw new ModbusProtocolException("读响应长度无效。");
         ushort[] values = new ushort[count];
         for (int index = 0; index < count; index++)
             values[index] = (ushort)((frame[3 + index * 2] << 8) | frame[4 + index * 2]);
@@ -92,26 +92,26 @@ public static class ModbusRtuCodec
     {
         Validate(response, request[0], request[1]);
         if (!response.SequenceEqual(request))
-            throw new ModbusProtocolException("Write response does not echo the request.");
+            throw new ModbusProtocolException("写响应未回显请求。");
     }
 
     public static void ValidateWriteMultipleResponse(ReadOnlySpan<byte> response, ReadOnlySpan<byte> request)
     {
         Validate(response, request[0], 0x10);
         if (response.Length != 8 || !response[2..6].SequenceEqual(request[2..6]))
-            throw new ModbusProtocolException("Write-multiple response does not match the request.");
+            throw new ModbusProtocolException("批量写响应与请求不匹配。");
     }
 
     private static void Validate(ReadOnlySpan<byte> frame, byte slave, byte function)
     {
-        if (!HasValidCrc(frame)) throw new ModbusProtocolException("Modbus CRC validation failed.");
-        if (frame[0] != slave) throw new ModbusProtocolException("Slave address does not match.");
+        if (!HasValidCrc(frame)) throw new ModbusProtocolException("Modbus CRC 校验失败。");
+        if (frame[0] != slave) throw new ModbusProtocolException("从站地址不匹配。");
         if (frame[1] == (function | 0x80))
         {
             if (frame.Length != 5)
-                throw new ModbusProtocolException("Modbus exception response length is invalid.");
-            throw new ModbusProtocolException($"Slave returned Modbus exception 0x{frame[2]:X2}.", frame[2]);
+                throw new ModbusProtocolException("Modbus 异常响应长度无效。");
+            throw new ModbusProtocolException($"从站返回 Modbus 异常 0x{frame[2]:X2}。", frame[2]);
         }
-        if (frame[1] != function) throw new ModbusProtocolException("Function code does not match.");
+        if (frame[1] != function) throw new ModbusProtocolException("功能码不匹配。");
     }
 }

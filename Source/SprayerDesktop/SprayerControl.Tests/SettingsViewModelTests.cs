@@ -27,6 +27,7 @@ public sealed class SettingsViewModelTests
         Assert.Equal(TimeSpan.Zero, configuration.LastModifiedUtc.Offset);
         Assert.Empty(settings.ValidationError);
         Assert.Equal(10, settings.ValidatedCurvePoints.Count);
+        Assert.Equal(NozzleMask.DefaultUiToPhysicalBit, configuration.NozzleMapping);
     }
 
     [Fact]
@@ -42,7 +43,7 @@ public sealed class SettingsViewModelTests
 
         Assert.False(saved);
         Assert.Equal(0, store.SaveCount);
-        Assert.Contains("monotonic", settings.ValidationError, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("单调", settings.ValidationError);
     }
 
     [Fact]
@@ -72,6 +73,105 @@ public sealed class SettingsViewModelTests
         Assert.Equal(0, store.SaveCount);
         Assert.False(settings.CanSaveLocal);
         Assert.Contains("演示模式", settings.ValidationError);
+    }
+
+    [Fact]
+    public async Task MappingSelectionsRoundTripIntoSavedConfiguration()
+    {
+        var store = new RecordingStore();
+        var settings = new SettingsViewModel(store);
+        settings.SetNozzleMappingSelection(0, 5);
+        settings.SetNozzleMappingSelection(1, 4);
+        settings.SetNozzleMappingSelection(2, 7);
+        settings.SetNozzleMappingSelection(3, 2);
+        settings.SetNozzleMappingSelection(4, 3);
+        settings.SetNozzleMappingSelection(5, 6);
+        settings.SetNozzleMappingSelection(6, 1);
+        settings.SetNozzleMappingSelection(7, 0);
+        for (int opening = 10; opening <= 100; opening += 10)
+            settings.SetCalibrationCurrent(opening, opening / 100.0);
+
+        bool saved = await settings.SaveAsync();
+
+        Assert.True(saved);
+        Assert.Equal(new byte[] { 5, 4, 7, 2, 3, 6, 1, 0 }, settings.SavedConfiguration!.NozzleMapping);
+    }
+
+    [Fact]
+    public async Task DuplicateMappingSelectionsAreRejectedWithoutSaving()
+    {
+        var store = new RecordingStore();
+        var settings = new SettingsViewModel(store);
+        settings.SetNozzleMappingSelection(0, 3);
+        settings.SetNozzleMappingSelection(1, 3);
+        for (int opening = 10; opening <= 100; opening += 10)
+            settings.SetCalibrationCurrent(opening, opening / 100.0);
+
+        bool saved = await settings.SaveAsync();
+
+        Assert.False(saved);
+        Assert.Equal(0, store.SaveCount);
+        Assert.Contains("重复", settings.ValidationError);
+    }
+
+    [Fact]
+    public void ResetNozzleMappingRestoresTheDefaultTable()
+    {
+        var settings = new SettingsViewModel(new RecordingStore());
+        settings.SetNozzleMappingSelection(0, 7);
+        settings.ResetNozzleMapping();
+
+        Assert.Equal(
+            NozzleMask.DefaultUiToPhysicalBit,
+            settings.NozzleMappingEntries.Select(entry => (byte)entry.SelectedPhysicalIndex).ToArray());
+    }
+
+    [Fact]
+    public void CalibrationCompletenessTracksFilledPoints()
+    {
+        var settings = new SettingsViewModel(new RecordingStore());
+        Assert.False(settings.IsCalibrationComplete);
+
+        for (int opening = 10; opening <= 90; opening += 10)
+            settings.SetCalibrationCurrent(opening, opening / 100.0);
+        Assert.False(settings.IsCalibrationComplete);
+
+        settings.SetCalibrationCurrent(100, 1.0);
+        Assert.True(settings.IsCalibrationComplete);
+    }
+
+    [Fact]
+    public async Task LastDutyPercentIsPersistedAndReloaded()
+    {
+        var store = new RecordingStore();
+        var settings = new SettingsViewModel(store);
+        settings.LastDutyPercent = 72;
+        for (int opening = 10; opening <= 100; opening += 10)
+            settings.SetCalibrationCurrent(opening, opening / 100.0);
+
+        Assert.True(await settings.SaveAsync());
+        Assert.Equal(72, settings.SavedConfiguration!.LastDutyPercent);
+
+        var reloaded = new SettingsViewModel(store, settings.SavedConfiguration);
+        Assert.Equal(72, reloaded.LastDutyPercent);
+    }
+
+    [Fact]
+    public void MappingEntriesLoadFromTheSavedConfiguration()
+    {
+        byte[] custom = [0, 1, 2, 3, 4, 5, 6, 7];
+        HostConfiguration configuration = new(
+            1, 30, 10,
+            new ReturnValveCalibration(JsonHostConfigurationStoreTests.ValidPoints()),
+            DateTimeOffset.UtcNow,
+            custom);
+        var settings = new SettingsViewModel(new RecordingStore(), configuration);
+
+        Assert.Equal(
+            custom,
+            settings.NozzleMappingEntries.Select(entry => (byte)entry.SelectedPhysicalIndex).ToArray());
+        Assert.Equal("左一", settings.NozzleMappingEntries[0].UiLabel);
+        Assert.Equal(8, settings.NozzleMappingEntries.Count);
     }
 
     private sealed class RecordingStore : IHostConfigurationStore

@@ -2,6 +2,7 @@ using System.IO;
 using System.Windows;
 using System.Windows.Media;
 using System.Windows.Threading;
+using SprayerControl.App.Helpers;
 using SprayerControl.App.Services;
 using SprayerControl.App.ViewModels;
 using SprayerControl.Core;
@@ -15,12 +16,14 @@ public partial class MainWindow : Window
     private readonly DispatcherTimer _refreshTimer = new() { Interval = TimeSpan.FromMilliseconds(500) };
     private readonly LogViewModel _log = new();
     private readonly IHostConfigurationStore _store = new JsonHostConfigurationStore();
+    private readonly PortMemoryStore _portMemory = new();
     private IControllerSession? _session;
     private DashboardViewModel? _dashboard;
     private SettingsViewModel? _settings;
     private HostConfiguration? _activeConfiguration;
     private Task? _discoveryTask;
     private bool _refreshing;
+    private bool _startupRestoreApplied;
     private readonly bool _demo;
 
     public MainWindow()
@@ -38,6 +41,8 @@ public partial class MainWindow : Window
 
     private async void OnLoaded(object sender, RoutedEventArgs e)
     {
+        // 上机自适应：按实际屏幕分辨率/DPI 缩放设计稿并铺满工作区；截图模式仅缩放内容。
+        AdaptiveLayoutManager.Apply(this, RootLayout, capture: App.CapturePath is not null);
         if (App.CapturePath is not null)
         {
             WindowState = WindowState.Normal; Width = App.CapturePixelWidth; Height = App.CapturePixelHeight;
@@ -78,7 +83,7 @@ public partial class MainWindow : Window
         if (_demo)
         {
             _dashboard.PreviewDuty = 60;
-            _dashboard.PreviewReturnOpening = 65;
+            _dashboard.PreviewReturnOpening = 100;
             await _session.SetNozzleMaskAsync(NozzleMask.ForPreset(CanopyPreset.Groups34, true, true), token);
             await _session.SetPwmEnabledAsync(true, token);
             await _dashboard.CommitReturnOpeningAsync(token);
@@ -86,7 +91,7 @@ public partial class MainWindow : Window
             _log.Add("电磁阀总开关 已开启");
             _log.Add("电磁阀占空比设为 60%");
             _log.Add("喷头模式切换为 第3+4组");
-            _log.Add("回流阀开度设为 65%");
+            _log.Add("回流阀开度设为 100%（安全全开）");
         }
         UpdateSettingsControllerAction();
     }
@@ -105,13 +110,16 @@ public partial class MainWindow : Window
             {
                 SetHeaderConnection("正在自动查找控制器", connected: false);
                 SerialPortDescriptor[] ports = await WindowsSerialPortDiscovery.GetPortsAsync(token);
+                string? preferredPort = _portMemory.Load();
                 ControllerConnection? found = await Task.Run(() => ControllerDiscovery.TryDiscoverAsync(
-                    ports, port => new ReliableModbusChannel(new SerialModbusChannel(port.PortName)), token), token);
+                    ports, port => new ReliableModbusChannel(new SerialModbusChannel(port.PortName)), token,
+                    preferredPortName: preferredPort), token);
                 if (found is null)
                 {
                     await Task.Delay(2000, token);
                     continue;
                 }
+                _portMemory.Save(found.Port.PortName);
                 var session = await ModbusControllerSession.CreateAsync(found.Client, found, token);
                 await ReplaceSessionAsync(session, token);
                 SetHeaderConnection("控制器已连接", connected: true);
@@ -143,11 +151,59 @@ public partial class MainWindow : Window
     private async Task ReplaceSessionAsync(IControllerSession session, CancellationToken token)
     {
         IControllerSession? old = _session;
+        session.UpdateNozzleMapping(_settings?.SavedConfiguration?.NozzleMapping ?? NozzleMask.DefaultUiToPhysicalBit);
         _session = session;
         _dashboard = new DashboardViewModel(session, _settings?.SavedConfiguration, _log);
         Dashboard.Bind(_dashboard, false);
+        if (_settings is not null)
+            _settings.PwmDutyMaximum = session.ParameterLimits.DutyMaximum;
         await _dashboard.RefreshAsync(token);
         if (old is not null) await old.DisposeAsync();
+
+        /* 每次连接成功都自动"保存本地配置"一次（等同点击设置页保存按钮）：
+           标定未填满时静默跳过（不打扰）；异常仅记日志；演示模式禁止写本地。 */
+        if (!_demo && _settings is not null && _settings.IsCalibrationComplete)
+        {
+            try
+            {
+                bool saved = await _settings.SaveAsync(token);
+                if (saved && _settings.SavedConfiguration is not null)
+                {
+                    ApplyConfiguration(_settings.SavedConfiguration);
+                    _log.Add("已自动保存本地配置。");
+                }
+            }
+            catch (Exception exception)
+            {
+                _log.Add($"自动保存本地配置失败：{exception.Message}");
+            }
+        }
+
+        /* 启动恢复（仅首次连接成功时执行一次）：
+           占空比恢复到上次记忆值（按 [下限,上限] 钳制，防止越界导致提交被拒），
+           回流阀开度自动设为 100%（安全全开）并下发。 */
+        if (!_startupRestoreApplied && _settings?.SavedConfiguration is HostConfiguration restore)
+        {
+            _startupRestoreApplied = true;
+            int dutyMinimum = _dashboard.PwmDutyMinimum;
+            int dutyMaximum = Math.Max(dutyMinimum, _dashboard.PwmDutyMaximum);
+            int restoredDuty = Math.Clamp(
+                restore.LastDutyPercent ?? _dashboard.ConfirmedDuty,
+                dutyMinimum,
+                dutyMaximum);
+            _dashboard.PreviewDuty = restoredDuty;
+            _dashboard.PreviewReturnOpening = 100;
+            try
+            {
+                await _dashboard.CommitReturnOpeningAsync(token);
+                _log.Add($"启动恢复：电磁阀占空比 {_dashboard.ConfirmedDuty}%，回流阀开度 100%。");
+            }
+            catch (Exception exception)
+            {
+                _log.Add($"启动恢复失败：{exception.Message}");
+            }
+        }
+
         UpdateSettingsControllerAction();
     }
 
@@ -169,6 +225,7 @@ public partial class MainWindow : Window
         int? oldSafety = _activeConfiguration?.ReturnValveSafetyMinimum;
         _activeConfiguration = configuration;
         _dashboard?.UpdateConfiguration(configuration);
+        _session?.UpdateNozzleMapping(configuration.NozzleMapping);
         if (oldSafety.HasValue && oldSafety.Value != configuration.ReturnValveSafetyMinimum)
             _log.Add($"回流阀安全下限由 {oldSafety}% 修改为 {configuration.ReturnValveSafetyMinimum}%（已确认并保存）");
         else
@@ -190,10 +247,12 @@ public partial class MainWindow : Window
     {
         if (_demo || _session?.IsConnected != true || _dashboard is null || _settings?.SavedConfiguration is not HostConfiguration configuration)
             throw new InvalidOperationException("当前状态不允许保存控制器上电默认值。");
-        double current = configuration.ReturnValveCalibration.CurrentMilliampsAt(_dashboard.PreviewReturnOpening, configuration.ReturnValveSafetyMinimum);
+        /* 需求3A：上电默认值固定以回流阀 100% 全开电流保存（安全位），
+           控制器单独上电即自动把比例阀调至 100% 全开。 */
+        double current = configuration.ReturnValveCalibration.CurrentMilliampsAt(100, configuration.ReturnValveSafetyMinimum);
         ushort microamps = checked((ushort)Math.Round(current * 1000, MidpointRounding.AwayFromZero));
         await _session.SavePowerOnDefaultsAsync(_dashboard.ConfirmedMask, (ushort)_dashboard.ConfirmedDuty, microamps, token);
-        _log.Add("喷嘴掩码、占空比和回流阀电流已保存为控制器上电默认值。");
+        _log.Add("喷嘴掩码、占空比和回流阀电流已保存为控制器上电默认值（回流阀上电为 100% 全开）。");
     }
 
     private void SetHeaderConnection(string text, bool connected, bool error = false)
@@ -216,6 +275,23 @@ public partial class MainWindow : Window
     private async void OnClosed(object? sender, EventArgs e)
     {
         _refreshTimer.Stop(); _lifetime.Cancel();
+        /* 需求1A：退出时自动保存当前设置（标定、映射、占空比记忆等），无需手动点保存。 */
+        try
+        {
+            if (!_demo && _settings is not null)
+            {
+                if (_dashboard is not null)
+                    _settings.LastDutyPercent = _dashboard.ConfirmedDuty;
+                bool saved = await _settings.SaveAsync(CancellationToken.None);
+                if (saved)
+                    _log.Add("退出时已自动保存本地配置。");
+            }
+        }
+        catch (Exception exception)
+        {
+            _log.Add($"退出自动保存失败：{exception.Message}");
+        }
+
         if (_session is not null) await _session.DisposeAsync();
         _lifetime.Dispose();
     }
@@ -230,6 +306,7 @@ internal sealed class DisconnectedControllerSession : IControllerSession
 {
     public bool IsConnected => false;
     public ControllerCapabilities Capabilities => new(1, 0);
+    public ControllerParameterLimits ParameterLimits => ControllerParameterLimits.Default;
     public Task SetNozzleMaskAsync(NozzleMask mask, CancellationToken cancellationToken = default) => Task.FromException(new IOException("控制器尚未连接。"));
     public Task SetPwmEnabledAsync(bool enabled, CancellationToken cancellationToken = default) => Task.FromException(new IOException("控制器尚未连接。"));
     public Task WriteOperatingSetpointsAsync(ushort duty, ushort targetCurrentMicroamps, CancellationToken cancellationToken = default) => Task.FromException(new IOException("控制器尚未连接。"));

@@ -40,7 +40,10 @@ size_t AppRuntime_ProcessHostFrame(AppRuntime *r,const uint8_t *request,size_t r
 
 void AppRuntime_RefreshStatus(AppRuntime *r)
 {
-    r->host.status.pwm_tick=r->pwm.tick; r->host.status.output_mask=r->last_output_mask;
+    r->host.status.pwm_tick=r->pwm.tick;
+    /* 0x0108 上报“当前配置的有效输出掩码”（稳定值），而非 PWM 每一瞬间的电平。
+       last_output_mask 是 10Hz PWM 实时输出，若上报会让上位机界面开关状态乱跳。 */
+    r->host.status.output_mask=r->host.pwm_enabled?HostRegisters_GetOutputMask(&r->host):0U;
     r->host.status.current_module_state=(r->current_module.state==CURRENT_ONLINE)?1U:(r->current_module.state==CURRENT_RETRY_WAIT)?2U:0U;
     r->host.status.target_current_ua=r->current_module.target; r->host.status.current_module_readback=r->current_module.readback;
     r->host.status.current_module_fault_count=r->current_module.fault_count;

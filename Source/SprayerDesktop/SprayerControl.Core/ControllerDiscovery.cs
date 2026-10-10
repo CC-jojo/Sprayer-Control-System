@@ -27,9 +27,18 @@ public static class ControllerDiscovery
         IEnumerable<SerialPortDescriptor> ports,
         Func<SerialPortDescriptor, IModbusChannel> channelFactory,
         CancellationToken cancellationToken = default,
-        Action<ControllerProbeResult>? diagnostic = null)
+        Action<ControllerProbeResult>? diagnostic = null,
+        string? preferredPortName = null)
     {
-        foreach (SerialPortDescriptor port in ports.OrderBy(SerialPortSelection.GetRank))
+        /* 记忆端口优先：上次成功连接的 COM 口排在最前，匹配不到再按原优先级扫描。 */
+        IEnumerable<SerialPortDescriptor> ordered = preferredPortName is null
+            ? ports.OrderBy(SerialPortSelection.GetRank)
+            : ports.OrderBy(port => string.Equals(
+                    port.PortName, preferredPortName, StringComparison.OrdinalIgnoreCase)
+                ? -1
+                : SerialPortSelection.GetRank(port));
+
+        foreach (SerialPortDescriptor port in ordered)
         {
             cancellationToken.ThrowIfCancellationRequested();
             IModbusChannel? channel = null;

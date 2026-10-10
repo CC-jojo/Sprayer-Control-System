@@ -14,3 +14,15 @@ Temp/
 
 # Local Superpowers working state (durable task records under Docs remain tracked)
 .superpowers/sdd/progress.md
+
+# Local release/publish outputs (regenerate with Tools/Publish-Releases.ps1)
+运行版本/
+Source/SprayerDesktop/Publish_Release/
+SprayerTouchHMI_Demo/Publish/
+Release/Desktop/runtimes/
+
+# IDE state
+**/.idea/
+
+# Scratch downloads
+Source/SprayerDesktop/SprayerControl.Core/Clip_*.ico

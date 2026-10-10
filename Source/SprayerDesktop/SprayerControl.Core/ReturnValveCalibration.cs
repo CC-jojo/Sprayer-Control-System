@@ -18,7 +18,7 @@ public sealed class ReturnValveCalibration
         CalibrationPoint[] snapshot = points.ToArray();
         if (Array.Exists(snapshot, static point => point is null))
         {
-            throw new ArgumentException("Calibration points cannot contain null elements.", nameof(points));
+            throw new ArgumentException("标定点不能包含空元素。", nameof(points));
         }
 
         CalibrationPoint[] sortedPoints = snapshot.OrderBy(point => point.OpeningPercent).ToArray();
@@ -51,13 +51,13 @@ public sealed class ReturnValveCalibration
     {
         if (safetyMinimumOpening is < MinimumOpening or > MaximumOpening)
         {
-            throw new ArgumentOutOfRangeException(nameof(safetyMinimumOpening), safetyMinimumOpening, "Safety minimum opening must be from 10 through 100.");
+            throw new ArgumentOutOfRangeException(nameof(safetyMinimumOpening), safetyMinimumOpening, "安全下限开度必须在 10 到 100 之间。");
         }
 
         ValidateOpening(openingPercent);
         if (openingPercent < safetyMinimumOpening)
         {
-            throw new InvalidOperationException("Requested opening is below the configured safety minimum.");
+            throw new InvalidOperationException("请求的开度低于配置的安全下限。");
         }
 
         return CurrentMilliampsAt(openingPercent);
@@ -67,7 +67,7 @@ public sealed class ReturnValveCalibration
     {
         if (candidatePoints.Count != 10)
         {
-            throw new ArgumentException("Calibration must contain exactly ten points.", nameof(candidatePoints));
+            throw new ArgumentException("标定必须包含十个标定点。", nameof(candidatePoints));
         }
 
         for (int index = 0; index < candidatePoints.Count; index++)
@@ -76,12 +76,12 @@ public sealed class ReturnValveCalibration
             int expectedOpening = MinimumOpening + (index * OpeningIncrement);
             if (point.OpeningPercent != expectedOpening)
             {
-                throw new ArgumentException("Calibration openings must be 10 through 100 in increments of 10.", nameof(candidatePoints));
+                throw new ArgumentException("标定开度必须是 10 到 100，且以 10 递增。", nameof(candidatePoints));
             }
 
             if (!double.IsFinite(point.CurrentMilliamps) || point.CurrentMilliamps is < 0 or > 20)
             {
-                throw new ArgumentException("Calibration current must be finite and within 0 through 20 mA.", nameof(candidatePoints));
+                throw new ArgumentException("标定电流必须是有限值，且在 0 到 20 mA 之间。", nameof(candidatePoints));
             }
         }
 
@@ -96,7 +96,7 @@ public sealed class ReturnValveCalibration
 
             if (direction != 0 && comparison != direction)
             {
-                throw new ArgumentException("Calibration current must be monotonic.", nameof(candidatePoints));
+                throw new ArgumentException("标定电流必须是单调的。", nameof(candidatePoints));
             }
 
             direction = comparison;
@@ -107,7 +107,7 @@ public sealed class ReturnValveCalibration
     {
         if (!double.IsFinite(openingPercent) || openingPercent < MinimumOpening || openingPercent > MaximumOpening)
         {
-            throw new ArgumentOutOfRangeException(nameof(openingPercent), openingPercent, "Opening must be finite and within 10 through 100.");
+            throw new ArgumentOutOfRangeException(nameof(openingPercent), openingPercent, "开度必须是有限值，且在 10 到 100 之间。");
         }
     }
 }

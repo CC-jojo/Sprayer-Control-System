@@ -29,10 +29,12 @@ public sealed class DemoControllerSession : IControllerSession
 
     public ControllerCapabilities Capabilities { get; }
 
+    public ControllerParameterLimits ParameterLimits { get; } = ControllerParameterLimits.Default;
+
     public void FailNextOperation(Exception? exception = null)
     {
         ThrowIfDisposed();
-        Interlocked.Exchange(ref _nextFailure, exception ?? new InvalidOperationException("Demo controller operation failed."));
+        Interlocked.Exchange(ref _nextFailure, exception ?? new InvalidOperationException("演示控制器操作失败。"));
     }
 
     public Task SetNozzleMaskAsync(NozzleMask mask, CancellationToken cancellationToken = default) =>
@@ -107,8 +109,8 @@ public sealed class DemoControllerSession : IControllerSession
     private static void ValidateOperatingSetpoints(ushort duty, ushort targetCurrentMicroamps)
     {
         if (duty is < 30 or > 80)
-            throw new ArgumentOutOfRangeException(nameof(duty), "Duty must be from 30 through 80 percent.");
+            throw new ArgumentOutOfRangeException(nameof(duty), "电磁阀占空比必须在 30% 到 80% 之间。");
         if (targetCurrentMicroamps > 20000)
-            throw new ArgumentOutOfRangeException(nameof(targetCurrentMicroamps), "Current must be from 0 through 20000 microamps.");
+            throw new ArgumentOutOfRangeException(nameof(targetCurrentMicroamps), "目标电流必须在 0 到 20000 微安之间。");
     }
 }

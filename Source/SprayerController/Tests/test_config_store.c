@@ -1,5 +1,7 @@
 #include "config_store.h"
 
+#include "app_config.h"
+
 #include <assert.h>
 #include <stdbool.h>
 #include <stddef.h>
@@ -41,11 +43,11 @@ static void FinalizeRecord(uint8_t *record)
 
 static void AssertDefaults(const ControllerConfig *config)
 {
-    assert(config->mode == SPRAY_ALL);
-    assert(config->nozzle_mask == 0xFFU);
-    assert(config->duty == 30U);
-    assert(config->duty_min == 30U);
-    assert(config->duty_max == 80U);
+    assert(config->mode == SPRAY_ALL_OFF);
+    assert(config->nozzle_mask == 0x00U);
+    assert(config->duty == APP_PWM_MIN_DEFAULT);
+    assert(config->duty_min == APP_PWM_MIN_DEFAULT);
+    assert(config->duty_max == APP_PWM_MAX_DEFAULT);
     assert(!config->persistence_enabled);
     assert(config->target_current_ua == 0U);
 }

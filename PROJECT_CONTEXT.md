@@ -27,7 +27,7 @@ Tasks 3 through 7 are complete in local task commits. Firmware exposes protocol-
 - Windows `.NET 8` WPF touchscreen application.
 - Responsive landscape layout for 16:9 and 16:10 displays.
 - Native WPF recreation of the approved dark three-column HMI.
-- Eight individually controllable nozzle channels plus left/right masters and canopy presets.
+- Eight nozzle rings shown as pure status indicators (not individual touch controls), left/right side masters, and a four-position vertical canopy-height slider.
 - PWM master and unified duty; configurable lower bound and fixed `80%` upper bound.
 - Return valve uses ten calibration points from `10%` through `100%`, piecewise-linear interpolation, and a configurable safety minimum.
 - No special `0%` hardware signal-cut feature.

@@ -9,9 +9,7 @@ namespace SprayerControl.App.Controls;
 
 public partial class SegmentedGaugeControl : UserControl
 {
-    private const int SegmentCount = 13;
-    private bool _gestureActive;
-    private bool _gestureCancelled;
+    private const int SegmentCount = 25;
 
     public static readonly DependencyProperty MinimumProperty = DependencyProperty.Register(
         nameof(Minimum), typeof(double), typeof(SegmentedGaugeControl), new PropertyMetadata(0d, OnRangeChanged, CoerceMinimum));
@@ -34,6 +32,12 @@ public partial class SegmentedGaugeControl : UserControl
     public static readonly DependencyProperty ReleaseCommandProperty = DependencyProperty.Register(
         nameof(ReleaseCommand), typeof(ICommand), typeof(SegmentedGaugeControl));
 
+    public static readonly DependencyProperty StepDownCommandProperty = DependencyProperty.Register(
+        nameof(StepDownCommand), typeof(ICommand), typeof(SegmentedGaugeControl));
+
+    public static readonly DependencyProperty StepUpCommandProperty = DependencyProperty.Register(
+        nameof(StepUpCommand), typeof(ICommand), typeof(SegmentedGaugeControl));
+
     public SegmentedGaugeControl()
     {
         InitializeComponent();
@@ -53,6 +57,10 @@ public partial class SegmentedGaugeControl : UserControl
     public bool IsPending { get => (bool)GetValue(IsPendingProperty); set => SetValue(IsPendingProperty, value); }
 
     public ICommand? ReleaseCommand { get => (ICommand?)GetValue(ReleaseCommandProperty); set => SetValue(ReleaseCommandProperty, value); }
+
+    public ICommand? StepDownCommand { get => (ICommand?)GetValue(StepDownCommandProperty); set => SetValue(StepDownCommandProperty, value); }
+
+    public ICommand? StepUpCommand { get => (ICommand?)GetValue(StepUpCommandProperty); set => SetValue(StepUpCommandProperty, value); }
 
     private static object CoerceMinimum(DependencyObject dependencyObject, object baseValue)
     {
@@ -76,9 +84,10 @@ public partial class SegmentedGaugeControl : UserControl
 
     private static object CoercePreviewValue(DependencyObject dependencyObject, object baseValue)
     {
+        // 预览值只受量程约束；安全下限仅用于着色提示（橙色安全区），
+        // 拖到安全区以下时让操作者看到真实位置，提交时再由上层钳制/提示。
         SegmentedGaugeControl gauge = (SegmentedGaugeControl)dependencyObject;
-        double selectableMinimum = Math.Min(gauge.Maximum, Math.Max(gauge.Minimum, gauge.SafetyMinimum));
-        return Math.Clamp(FiniteOr((double)baseValue, selectableMinimum), selectableMinimum, gauge.Maximum);
+        return Math.Clamp(FiniteOr((double)baseValue, gauge.Minimum), gauge.Minimum, gauge.Maximum);
     }
 
     private static void OnRangeChanged(DependencyObject dependencyObject, DependencyPropertyChangedEventArgs _)
@@ -92,128 +101,6 @@ public partial class SegmentedGaugeControl : UserControl
 
     private static double FiniteOr(double value, double fallback) => double.IsFinite(value) ? value : fallback;
 
-    private void OnMouseLeftButtonDown(object sender, MouseButtonEventArgs e)
-    {
-        if (e.StylusDevice is not null || IsPending || !IsEnabled)
-        {
-            return;
-        }
-
-        BeginGesture(e.GetPosition(this));
-        CaptureMouse();
-        e.Handled = true;
-    }
-
-    private void OnMouseMove(object sender, MouseEventArgs e)
-    {
-        if (_gestureActive && e.LeftButton == MouseButtonState.Pressed)
-        {
-            UpdatePreviewFrom(e.GetPosition(this));
-        }
-    }
-
-    private void OnMouseLeftButtonUp(object sender, MouseButtonEventArgs e)
-    {
-        if (e.StylusDevice is null)
-        {
-            if (IsPending)
-            {
-                CancelGesture();
-            }
-            else
-            {
-                CompleteGesture();
-            }
-            ReleaseMouseCapture();
-            e.Handled = true;
-        }
-    }
-
-    private void OnLostMouseCapture(object sender, MouseEventArgs e) => CancelGesture();
-
-    private void OnTouchDown(object sender, TouchEventArgs e)
-    {
-        if (IsPending || !IsEnabled)
-        {
-            return;
-        }
-
-        BeginGesture(e.GetTouchPoint(this).Position);
-        e.TouchDevice.Capture(this);
-        e.Handled = true;
-    }
-
-    private void OnTouchMove(object sender, TouchEventArgs e)
-    {
-        if (_gestureActive)
-        {
-            UpdatePreviewFrom(e.GetTouchPoint(this).Position);
-            e.Handled = true;
-        }
-    }
-
-    private void OnTouchUp(object sender, TouchEventArgs e)
-    {
-        if (IsPending || !IsEnabled)
-        {
-            CancelGesture();
-        }
-        else
-        {
-            CompleteGesture();
-        }
-        e.TouchDevice.Capture(null);
-        e.Handled = true;
-    }
-
-    private void OnLostTouchCapture(object sender, TouchEventArgs e) => CancelGesture();
-
-    private void BeginGesture(Point position)
-    {
-        if (IsPending)
-        {
-            return;
-        }
-
-        _gestureActive = true;
-        _gestureCancelled = false;
-        UpdatePreviewFrom(position);
-    }
-
-    private void UpdatePreviewFrom(Point position)
-    {
-        if (IsPending || !IsEnabled || ActualWidth <= 0 || ActualHeight <= 0)
-        {
-            return;
-        }
-
-        double x = position.X - ActualWidth / 2d;
-        double y = position.Y - ActualHeight / 2d;
-        double angle = Math.Atan2(x, -y) * 180d / Math.PI;
-        double clampedAngle = Math.Clamp(angle, -120d, 120d);
-        PreviewValue = Minimum + ((clampedAngle + 120d) / 240d * (Maximum - Minimum));
-    }
-
-    private void CompleteGesture()
-    {
-        if (IsPending || !IsEnabled || !_gestureActive)
-        {
-            return;
-        }
-
-        _gestureActive = false;
-        if (!_gestureCancelled && ReleaseCommand?.CanExecute(PreviewValue) == true)
-        {
-            ReleaseCommand.Execute(PreviewValue);
-        }
-    }
-
-    private void CancelGesture()
-    {
-        _gestureCancelled = true;
-        _gestureActive = false;
-    }
-
     private void UpdateSegments()
     {
         if (!IsLoaded)
@@ -222,7 +109,7 @@ public partial class SegmentedGaugeControl : UserControl
         }
 
         double span = Math.Max(Maximum - Minimum, double.Epsilon);
-        double activeRatio = ((_gestureActive ? PreviewValue : Value) - Minimum) / span;
+        double activeRatio = (Value - Minimum) / span;
         double safetyRatio = (SafetyMinimum - Minimum) / span;
         for (int index = 1; index <= SegmentCount; index++)
         {
@@ -238,7 +125,7 @@ public partial class SegmentedGaugeControl : UserControl
 
         double selectableMinimum = Math.Max(Minimum, SafetyMinimum);
         AutomationProperties.SetName(this, "分段调节仪表");
-        AutomationProperties.SetHelpText(this, $"范围 {Minimum:F0} 到 {Maximum:F0}；安全下限 {selectableMinimum:F0}；拖动后松开确认。");
+        AutomationProperties.SetHelpText(this, $"范围 {Minimum:F0} 到 {Maximum:F0}；安全下限 {selectableMinimum:F0}；使用下方按钮步进调节。");
         AutomationProperties.SetItemStatus(this, IsPending
             ? $"等待控制器确认；预览 {PreviewValue:F0}"
             : $"当前 {Value:F0}；预览 {PreviewValue:F0}；安全下限 {selectableMinimum:F0}");

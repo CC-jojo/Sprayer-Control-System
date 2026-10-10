@@ -188,22 +188,29 @@ public sealed class ControllerClientTests
     }
 
     [Fact]
-    public async Task WritesOperatingSetpointsAsOneNonPersistentBatch()
+    public async Task WritesOperatingSetpointsAsTwoBatchesSkippingPersistenceFlag()
     {
         var channel = new FakeChannel();
         var client = new ControllerClient(channel, 1);
 
         await client.WriteOperatingSetpointsAsync(55, 12500);
 
-        Assert.Equal(0x10, channel.LastRequest[1]);
-        Assert.Equal(0x0001, (channel.LastRequest[2] << 8) | channel.LastRequest[3]);
-        Assert.Equal(9, (channel.LastRequest[4] << 8) | channel.LastRequest[5]);
-        Assert.Equal(18, channel.LastRequest[6]);
+        // 第一段：0x0001 起写 7 个寄存器（duty 等），不触碰 0x0008。
+        Assert.Equal(0x10, channel.Requests[0][1]);
+        Assert.Equal(0x0001, (channel.Requests[0][2] << 8) | channel.Requests[0][3]);
+        Assert.Equal(7, (channel.Requests[0][4] << 8) | channel.Requests[0][5]);
+        Assert.Equal(14, channel.Requests[0][6]);
         Assert.Equal(new byte[]
         {
-            0x00, 0x37, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-            0x00, 0x1E, 0x00, 0x50, 0x00, 0x00, 0x30, 0xD4
-        }, channel.LastRequest[7..^2]);
+            0x00, 0x37, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+            0x00, 0x00, 0x00, 0x1E, 0x00, 0x50
+        }, channel.Requests[0][7..^2]);
+
+        // 第二段：0x0009 起写 1 个寄存器（目标电流）。
+        Assert.Equal(0x10, channel.Requests[1][1]);
+        Assert.Equal(0x0009, (channel.Requests[1][2] << 8) | channel.Requests[1][3]);
+        Assert.Equal(1, (channel.Requests[1][4] << 8) | channel.Requests[1][5]);
+        Assert.Equal(new byte[] { 0x30, 0xD4 }, channel.Requests[1][7..^2]);
     }
 
     [Theory]
@@ -221,19 +228,72 @@ public sealed class ControllerClientTests
         Assert.Empty(channel.LastRequest);
     }
 
+    [Fact]
+    public async Task ReadsParameterLimitsFromCapabilityRegisters()
+    {
+        var channel = new FakeChannel
+        {
+            Response = ModbusRtuCodec.WithCrc([0x01, 0x03, 0x06, 0x00, 0x1E, 0x00, 0x50, 0x4E, 0x20])
+        };
+        var client = new ControllerClient(channel, 1);
+
+        ControllerParameterLimits limits = await client.ReadParameterLimitsAsync();
+
+        Assert.Equal(0x010C, (channel.LastRequest[2] << 8) | channel.LastRequest[3]);
+        Assert.Equal(3, (channel.LastRequest[4] << 8) | channel.LastRequest[5]);
+        Assert.Equal(new ControllerParameterLimits(30, 80, 20000), limits);
+        Assert.Equal(new ControllerParameterLimits(30, 80, 20000), client.ParameterLimits);
+    }
+
+    [Fact]
+    public async Task ParameterLimitsIllegalAddressFallsBackToDefaults()
+    {
+        var channel = new FakeChannel
+        {
+            Response = ModbusRtuCodec.WithCrc([0x01, 0x83, 0x02])
+        };
+
+        ControllerParameterLimits limits = await new ControllerClient(channel).ReadParameterLimitsAsync();
+
+        Assert.Equal(ControllerParameterLimits.Default, limits);
+    }
+
+    [Fact]
+    public async Task ParameterLimitsReflectedInOperatingSetpointsBatch()
+    {
+        var channel = new FakeChannel
+        {
+            Response = ModbusRtuCodec.WithCrc([0x01, 0x03, 0x06, 0x00, 0x28, 0x00, 0x64, 0x27, 0x10])
+        };
+        var client = new ControllerClient(channel, 1);
+        await client.ReadParameterLimitsAsync();
+
+        await client.WriteOperatingSetpointsAsync(50, 5000);
+
+        // 第一段 0x0001 起 7 个寄存器：duty=50、min=40、max=100。
+        Assert.Equal(new byte[]
+        {
+            0x00, 0x32, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+            0x00, 0x00, 0x00, 0x28, 0x00, 0x64
+        }, channel.Requests[^2][7..^2]);
+    }
+
     private sealed class FakeChannel : IModbusChannel
     {
+        public List<byte[]> Requests { get; } = [];
         public byte[] LastRequest { get; private set; } = [];
         public byte[] Response { get; init; } = [];
 
         public Task<byte[]> TransceiveAsync(byte[] request, int responseLength, CancellationToken cancellationToken)
         {
+            Requests.Add(request);
             LastRequest = request;
+            if (request[1] == 0x10)
+                return Task.FromResult(ModbusRtuCodec.WithCrc(request.AsSpan(0, 6)));
+            if (request[1] == 0x06)
+                return Task.FromResult((byte[])request.Clone());
             if (Response.Length != 0) return Task.FromResult(Response);
-            byte[] response = request[1] == 0x10
-                ? ModbusRtuCodec.WithCrc(request.AsSpan(0, 6))
-                : request;
-            return Task.FromResult(response);
+            return Task.FromResult((byte[])request.Clone());
         }
 
         public ValueTask DisposeAsync() => ValueTask.CompletedTask;

@@ -123,3 +123,18 @@ Release `1.0.0` packages desktop and firmware built from source commit `be19ee61
     $entries | ForEach-Object { $parts = $_ -split '  ', 2; if ((Get-FileHash -LiteralPath $parts[1] -Algorithm SHA256).Hash -ne $parts[0]) { throw "Checksum mismatch: $($parts[1])" } }
 
 - The release hash verification completed successfully. Credential-like scans over tracked source, documentation and release text found no credentials, tokens, private keys or connection strings. Physical controller, touchscreen, flash programming and spraying-output acceptance were not performed.
+
+## Task 9 interaction-fix evidence (no serial/UI/hardware)
+
+    dotnet test Source/SprayerDesktop/SprayerControl.Tests/SprayerControl.Tests.csproj --configuration Release --filter 'FullyQualifiedName~MainWindowLayoutTests'
+    dotnet test Source/SprayerDesktop/SprayerControl.sln --configuration Release
+    dotnet build Source/SprayerDesktop/SprayerControl.sln --configuration Release
+    git diff --check
+
+- RED: the updated interaction invariants failed as expected before product edits because the eight rings were still Buttons with `NozzleCommandParameter` and the canopy presets were still four Buttons with `Preset_Click`.
+- The eight rings are now pure status indicators (`IsHitTestVisible="False"`/`Focusable="False"`, no `CommandProperty`/`ICommand`, `IsPreviewing` added), and canopy presets moved to a vertical four-position snapping slider whose drag previews and whose single mouse/touch release calls `ApplyCanopyPresetAsync` once.
+- Focused Release layout tests: 7/7 passed.
+- Full desktop Release tests: 170/170 passed.
+- Release build: 0 warnings, 0 errors. `git diff --check` completed successfully.
+- `Start-Demo.cmd` is copied to the output/publish directory by the App project for a no-serial demo launch (`--demo --windowed`).
+- Physical controller, touchscreen, flash programming and spraying-output acceptance were not performed.

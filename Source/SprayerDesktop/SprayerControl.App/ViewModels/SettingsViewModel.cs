@@ -10,8 +10,11 @@ public sealed class SettingsViewModel : ObservableObject
     private readonly bool _allowPersistence;
     private readonly ObservableCollection<double?> _calibrationCurrents = Enumerable.Repeat<double?>(null, 10).ToObservableCollection();
     private readonly ReadOnlyObservableCollection<double?> _readOnlyCalibrationCurrents;
+    private readonly List<NozzleMappingEntry> _nozzleMappingEntries = [];
     private int _pwmDutyMinimum = 30;
+    private int _pwmDutyMaximum = 80;
     private int _returnValveSafetyMinimum = 10;
+    private int? _lastDutyPercent;
     private string _validationError = string.Empty;
     private HostConfiguration? _savedConfiguration;
 
@@ -22,6 +25,8 @@ public sealed class SettingsViewModel : ObservableObject
         _readOnlyCalibrationCurrents = new ReadOnlyObservableCollection<double?>(_calibrationCurrents);
         if (configuration is not null)
             CopyFrom(configuration);
+        else
+            ResetNozzleMapping();
         SaveCommand = new AsyncCommand(async token => await SaveAsync(token), ReportException);
     }
 
@@ -35,13 +40,55 @@ public sealed class SettingsViewModel : ObservableObject
         set => SetProperty(ref _pwmDutyMinimum, value);
     }
 
+    /* 占空比上限来自控制器能力区；连接后由 MainWindow 同步固件值。 */
+    public int PwmDutyMaximum
+    {
+        get => _pwmDutyMaximum;
+        set => SetProperty(ref _pwmDutyMaximum, value);
+    }
+
     public int ReturnValveSafetyMinimum
     {
         get => _returnValveSafetyMinimum;
         set => SetProperty(ref _returnValveSafetyMinimum, value);
     }
 
+    /* 占空比记忆：程序退出时由主窗口写入当前占空比，启动时恢复。 */
+    public int? LastDutyPercent
+    {
+        get => _lastDutyPercent;
+        set => SetProperty(ref _lastDutyPercent, value);
+    }
+
     public ReadOnlyObservableCollection<double?> CalibrationCurrents => _readOnlyCalibrationCurrents;
+
+    /* 十点标定是否已全部填满：填满即触发自动保存，防止重启后丢失。 */
+    public bool IsCalibrationComplete => _calibrationCurrents.All(static current => current.HasValue);
+
+    public IReadOnlyList<NozzleMappingEntry> NozzleMappingEntries => _nozzleMappingEntries;
+
+    public void SetNozzleMappingSelection(int entryIndex, int physicalIndex)
+    {
+        if (entryIndex is >= 0 and < 8 && physicalIndex is >= 0 and <= 7)
+            _nozzleMappingEntries[entryIndex].SelectedPhysicalIndex = physicalIndex;
+    }
+
+    public void ResetNozzleMapping()
+    {
+        byte[] mapping = NozzleMask.DefaultUiToPhysicalBit;
+        if (_nozzleMappingEntries.Count == 0)
+        {
+            for (int index = 0; index < 8; index++)
+                _nozzleMappingEntries.Add(new NozzleMappingEntry(NozzleMappingEntry.UiLabels[index], mapping[index]));
+        }
+        else
+        {
+            for (int index = 0; index < 8; index++)
+                _nozzleMappingEntries[index].SelectedPhysicalIndex = mapping[index];
+        }
+
+        OnPropertyChanged(nameof(NozzleMappingEntries));
+    }
 
     public IReadOnlyList<CalibrationPoint> ValidatedCurvePoints
     {
@@ -73,7 +120,7 @@ public sealed class SettingsViewModel : ObservableObject
     public void SetCalibrationCurrent(int openingPercent, double? currentMilliamps)
     {
         if (openingPercent is < 10 or > 100 || openingPercent % 10 != 0)
-            throw new ArgumentOutOfRangeException(nameof(openingPercent), "Calibration openings must be 10 through 100 in increments of 10.");
+            throw new ArgumentOutOfRangeException(nameof(openingPercent), "标定开度必须是 10 到 100，且以 10 递增。");
 
         _calibrationCurrents[(openingPercent / 10) - 1] = currentMilliamps;
         OnPropertyChanged(nameof(CalibrationCurrents));
@@ -115,7 +162,9 @@ public sealed class SettingsViewModel : ObservableObject
                 pwmDutyMinimum: PwmDutyMinimum,
                 returnValveSafetyMinimum: ReturnValveSafetyMinimum,
                 returnValveCalibration: BuildCalibration(),
-                lastModifiedUtc: DateTimeOffset.UtcNow);
+                lastModifiedUtc: DateTimeOffset.UtcNow,
+                nozzleMapping: BuildNozzleMapping(),
+                lastDutyPercent: LastDutyPercent);
         }
         catch (Exception exception) when (HasValidationFailure(exception))
         {
@@ -141,7 +190,7 @@ public sealed class SettingsViewModel : ObservableObject
     private ReturnValveCalibration BuildCalibration()
     {
         if (_calibrationCurrents.Any(static current => !current.HasValue))
-            throw new ArgumentException("All ten calibration currents are required.");
+            throw new ArgumentException("需要填写全部十个标定电流。");
 
         CalibrationPoint[] points = Enumerable.Range(1, 10)
             .Select(index => new CalibrationPoint(index * 10, _calibrationCurrents[index - 1]!.Value))
@@ -149,14 +198,28 @@ public sealed class SettingsViewModel : ObservableObject
         return new ReturnValveCalibration(points);
     }
 
+    private byte[] BuildNozzleMapping()
+    {
+        if (_nozzleMappingEntries.Count != 8)
+            return (byte[])NozzleMask.DefaultUiToPhysicalBit.Clone();
+        byte[] mapping = _nozzleMappingEntries.Select(entry => (byte)entry.SelectedPhysicalIndex).ToArray();
+        return NozzleMask.ValidateMapping(mapping);
+    }
+
     private void CopyFrom(HostConfiguration configuration)
     {
         PwmDutyMinimum = configuration.PwmDutyMinimum;
         ReturnValveSafetyMinimum = configuration.ReturnValveSafetyMinimum;
+        LastDutyPercent = configuration.LastDutyPercent;
         for (int index = 0; index < 10; index++)
             _calibrationCurrents[index] = configuration.ReturnValveCalibration.Points[index].CurrentMilliamps;
+        _nozzleMappingEntries.Clear();
+        byte[] mapping = configuration.NozzleMapping;
+        for (int index = 0; index < 8; index++)
+            _nozzleMappingEntries.Add(new NozzleMappingEntry(NozzleMappingEntry.UiLabels[index], mapping[index]));
         OnPropertyChanged(nameof(CalibrationCurrents));
         OnPropertyChanged(nameof(ValidatedCurvePoints));
+        OnPropertyChanged(nameof(NozzleMappingEntries));
     }
 
     private static bool HasValidationFailure(Exception exception) =>
@@ -168,4 +231,24 @@ public sealed class SettingsViewModel : ObservableObject
 internal static class ObservableCollectionExtensions
 {
     internal static ObservableCollection<T> ToObservableCollection<T>(this IEnumerable<T> source) => new(source);
+}
+
+/// <summary>一条界面开关→物理电磁阀的映射记录。</summary>
+public sealed class NozzleMappingEntry
+{
+    /* 物理喷头标签：bit0=左一、bit1=右一…bit7=右四，索引即物理位。 */
+    public static readonly string[] PhysicalLabels = ["左一", "右一", "左二", "右二", "左三", "右三", "左四", "右四"];
+
+    /* 界面开关标签：与界面位顺序一致。 */
+    public static readonly string[] UiLabels = ["左一", "右一", "左二", "右二", "左三", "右三", "左四", "右四"];
+
+    public NozzleMappingEntry(string uiLabel, int selectedPhysicalIndex)
+    {
+        UiLabel = uiLabel;
+        SelectedPhysicalIndex = selectedPhysicalIndex;
+    }
+
+    public string UiLabel { get; }
+
+    public int SelectedPhysicalIndex { get; set; }
 }

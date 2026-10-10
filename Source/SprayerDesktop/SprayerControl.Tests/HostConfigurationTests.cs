@@ -20,7 +20,7 @@ public sealed class HostConfigurationTests
     [Theory]
     [InlineData(0, 30, 10)]
     [InlineData(1, 29, 10)]
-    [InlineData(1, 81, 10)]
+    [InlineData(1, 101, 10)]
     [InlineData(1, 30, 9)]
     [InlineData(1, 30, 101)]
     public void ConstructorRejectsOutOfRangeConfigurationValues(int schemaVersion, int pwmDutyMinimum, int safetyMinimum)
@@ -64,7 +64,8 @@ public sealed class HostConfigurationTests
             45,
             30,
             new ReturnValveCalibration(ReturnValveCalibrationTests.ValidPoints()),
-            new DateTimeOffset(2026, 8, 12, 18, 30, 0, TimeSpan.FromHours(8)));
+            new DateTimeOffset(2026, 8, 12, 18, 30, 0, TimeSpan.FromHours(8)),
+            lastDutyPercent: 66);
 
         string json = JsonSerializer.Serialize(original);
         HostConfiguration roundTripped = Assert.IsType<HostConfiguration>(JsonSerializer.Deserialize<HostConfiguration>(json));
@@ -74,6 +75,76 @@ public sealed class HostConfigurationTests
         Assert.Equal(original.ReturnValveSafetyMinimum, roundTripped.ReturnValveSafetyMinimum);
         Assert.Equal(original.LastModifiedUtc, roundTripped.LastModifiedUtc);
         Assert.Equal(original.ReturnValveCalibration.Points, roundTripped.ReturnValveCalibration.Points);
+        Assert.Equal(original.NozzleMapping, roundTripped.NozzleMapping);
+        Assert.Equal(66, roundTripped.LastDutyPercent);
+    }
+
+    [Fact]
+    public void LastDutyPercentDefaultsToNullAndValidatesRange()
+    {
+        HostConfiguration configuration = new(
+            1, 30, 10,
+            new ReturnValveCalibration(ReturnValveCalibrationTests.ValidPoints()),
+            DateTimeOffset.UtcNow);
+
+        Assert.Null(configuration.LastDutyPercent);
+
+        HostConfiguration remembered = new(
+            1, 30, 10,
+            new ReturnValveCalibration(ReturnValveCalibrationTests.ValidPoints()),
+            DateTimeOffset.UtcNow,
+            lastDutyPercent: 55);
+
+        Assert.Equal(55, remembered.LastDutyPercent);
+
+        Assert.Throws<ArgumentOutOfRangeException>(() =>
+            new HostConfiguration(
+                1, 30, 10,
+                new ReturnValveCalibration(ReturnValveCalibrationTests.ValidPoints()),
+                DateTimeOffset.UtcNow,
+                lastDutyPercent: 0));
+        Assert.Throws<ArgumentOutOfRangeException>(() =>
+            new HostConfiguration(
+                1, 30, 10,
+                new ReturnValveCalibration(ReturnValveCalibrationTests.ValidPoints()),
+                DateTimeOffset.UtcNow,
+                lastDutyPercent: 101));
+    }
+
+    [Fact]
+    public void DefaultMappingIsAppliedWhenNozzleMappingIsOmitted()
+    {
+        HostConfiguration configuration = new(1, 30, 10, new ReturnValveCalibration(ReturnValveCalibrationTests.ValidPoints()), DateTimeOffset.UtcNow);
+
+        Assert.Equal(NozzleMask.DefaultUiToPhysicalBit, configuration.NozzleMapping);
+        Assert.NotSame(NozzleMask.DefaultUiToPhysicalBit, configuration.NozzleMapping);
+    }
+
+    [Fact]
+    public void CustomMappingIsClonedAndExposed()
+    {
+        byte[] mapping = [0, 1, 2, 3, 4, 5, 6, 7];
+        HostConfiguration configuration = new(
+            1, 30, 10,
+            new ReturnValveCalibration(ReturnValveCalibrationTests.ValidPoints()),
+            DateTimeOffset.UtcNow,
+            mapping);
+
+        Assert.Equal(mapping, configuration.NozzleMapping);
+        Assert.NotSame(mapping, configuration.NozzleMapping);
+        mapping[0] = 7;
+        Assert.Equal(0, configuration.NozzleMapping[0]);
+    }
+
+    [Theory]
+    [InlineData(new byte[] { })]
+    [InlineData(new byte[] { 0, 1, 2, 3, 4, 5, 6 })]
+    [InlineData(new byte[] { 0, 1, 2, 3, 4, 5, 6, 8 })]
+    [InlineData(new byte[] { 0, 1, 2, 3, 4, 5, 6, 6 })]
+    public void InvalidMappingIsRejected(byte[] mapping)
+    {
+        Assert.ThrowsAny<ArgumentException>(() =>
+            new HostConfiguration(1, 30, 10, new ReturnValveCalibration(ReturnValveCalibrationTests.ValidPoints()), DateTimeOffset.UtcNow, mapping));
     }
 
     [Fact]

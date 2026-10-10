@@ -18,7 +18,9 @@ function(add_host_test target source)
         ${CMAKE_CURRENT_LIST_DIR}/../App/host_modbus.c
         ${CMAKE_CURRENT_LIST_DIR}/../App/current_module.c
         ${CMAKE_CURRENT_LIST_DIR}/../App/app_runtime.c)
-    target_include_directories(${target} PRIVATE ${CMAKE_CURRENT_LIST_DIR}/../App)
+    target_include_directories(${target} PRIVATE
+        ${CMAKE_CURRENT_LIST_DIR}/../App
+        ${CMAKE_CURRENT_LIST_DIR}/../Core/Inc)
     if(MSVC)
         target_compile_options(${target} PRIVATE /W4 /WX /utf-8)
     else()

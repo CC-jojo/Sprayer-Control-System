@@ -1,5 +1,6 @@
 ﻿using System.Configuration;
 using System.Data;
+using System.Reflection;
 using System.Windows;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
@@ -19,7 +20,8 @@ public partial class App : Application
 
     protected override void OnStartup(StartupEventArgs e)
     {
-        DemoMode = e.Args.Contains("--demo", StringComparer.OrdinalIgnoreCase);
+        // Demo 版发布时 AssemblyName 为 SprayerTouchHMI_Demo，即使 exe 被重命名也能自动进入演示模式。
+        DemoMode = e.Args.Contains("--demo", StringComparer.OrdinalIgnoreCase) || IsDemoAssembly();
         bool windowed = e.Args.Contains("--windowed", StringComparer.OrdinalIgnoreCase);
         int captureIndex = Array.FindIndex(e.Args, value => string.Equals(value, "--capture", StringComparison.OrdinalIgnoreCase));
         bool capture = captureIndex >= 0;
@@ -47,8 +49,8 @@ public partial class App : Application
         {
             int width = CapturePixelWidth > 0 ? CapturePixelWidth : checked((int)Math.Round(window.ActualWidth));
             int height = CapturePixelHeight > 0 ? CapturePixelHeight : checked((int)Math.Round(window.ActualHeight));
-            if (width < 1 || height < 1) throw new InvalidOperationException("Capture window was not measured.");
-            if (window.Content is not FrameworkElement content) throw new InvalidOperationException("Capture content is unavailable.");
+            if (width < 1 || height < 1) throw new InvalidOperationException("截图窗口尚未完成测量。");
+            if (window.Content is not FrameworkElement content) throw new InvalidOperationException("截图内容不可用。");
             window.WindowState = WindowState.Normal; window.Width = width; window.Height = height;
             window.Left = -20000; window.Top = -20000;
             window.UpdateLayout();
@@ -62,6 +64,9 @@ public partial class App : Application
         catch { Environment.ExitCode = 1; throw; }
         finally { Current.Dispatcher.BeginInvokeShutdown(System.Windows.Threading.DispatcherPriority.Send); }
     }
+
+    private static bool IsDemoAssembly() =>
+        string.Equals(Assembly.GetExecutingAssembly().GetName().Name, "SprayerTouchHMI_Demo", StringComparison.OrdinalIgnoreCase);
 
     private static double ReadDimension(string[] args, string name, double fallback)
     {

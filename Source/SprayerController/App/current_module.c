@@ -1,5 +1,6 @@
 #include "current_module.h"
 
+#include "app_config.h"
 #include "modbus_crc.h"
 
 #include <limits.h>
@@ -43,11 +44,11 @@ void CurrentModule_Init(CurrentModule *module, uint8_t slave_address)
     module->state = CURRENT_WRITE_PENDING;
 }
 
-/* 直接接收微安目标，超过模块0~20mA量程时钳位到20000微安。 */
+/* 直接接收微安目标，超过模块量程上限时钳位。 */
 void CurrentModule_SetTargetMicroamps(CurrentModule *module, uint16_t target_microamps)
 {
-    if (target_microamps > 20000U) {
-        target_microamps = 20000U;
+    if (target_microamps > APP_CURRENT_MAX_UA) {
+        target_microamps = APP_CURRENT_MAX_UA;
     }
     module->target = target_microamps;
     module->state = CURRENT_WRITE_PENDING;

@@ -42,10 +42,10 @@ public sealed class DashboardViewModelTests
         var dashboard = new DashboardViewModel(session, JsonHostConfigurationStoreTests.CreateConfiguration(), new LogViewModel());
         await dashboard.RefreshAsync();
 
-        await dashboard.SetLeftMasterAsync(enabled: false);
+        await dashboard.ToggleNozzleAsync(group: 1, right: true);
 
         Assert.Empty(session.MaskWrites);
-        Assert.Contains("firmware", dashboard.ErrorText, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("固件", dashboard.ErrorText);
     }
 
     [Fact]
@@ -83,7 +83,7 @@ public sealed class DashboardViewModelTests
     }
 
     [Fact]
-    public async Task MissingConfigurationAndSafetyViolationLockSetpointCommitBeforeSending()
+    public async Task MissingConfigurationBlocksCommitBeforeSending()
     {
         var session = new FakeSession { Status = Status() };
         var dashboard = new DashboardViewModel(session, null, new LogViewModel());
@@ -95,12 +95,24 @@ public sealed class DashboardViewModelTests
         Assert.False(dashboard.HasCommunicationFault);
         Assert.False(dashboard.CanCommitSetpoints);
         Assert.True(dashboard.IsConnected);
+    }
 
-        var configured = new DashboardViewModel(session, JsonHostConfigurationStoreTests.CreateConfiguration(), new LogViewModel());
-        configured.PreviewReturnOpening = 10;
-        await configured.CommitReturnOpeningAsync();
-        Assert.Empty(session.Setpoints);
-        Assert.Contains("safety", configured.ErrorText, StringComparison.OrdinalIgnoreCase);
+    [Fact]
+    public async Task OpeningBelowSafetyMinimumIsClampedAndCommittedAtTheSafetyFloor()
+    {
+        var session = new FakeSession { Status = Status() };
+        // 默认配置安全下限为 20%。
+        var dashboard = new DashboardViewModel(session, JsonHostConfigurationStoreTests.CreateConfiguration(), new LogViewModel());
+        dashboard.PreviewDuty = 45;
+
+        dashboard.PreviewReturnOpening = 10;
+        Assert.Equal(20, dashboard.PreviewReturnOpening);
+        Assert.Contains(dashboard.Log.Entries, entry => entry.Contains("自动钳制"));
+        Assert.Empty(dashboard.ErrorText);
+
+        await dashboard.CommitReturnOpeningAsync();
+        Assert.Equal((ushort)200, Assert.Single(session.Setpoints).Current);
+        Assert.Equal(20, dashboard.ConfirmedReturnOpening);
     }
 
     [Fact]
@@ -150,13 +162,116 @@ public sealed class DashboardViewModelTests
         Assert.Equal(50, dashboard.PreviewReturnOpening);
     }
 
-    private static ControllerStatus Status(ushort outputMask = 0) =>
-        new(0, 0, 0, 0, 0, 0, 0x0202, true, outputMask, false);
+    [Fact]
+    public void ConfirmedDutyStartsWithRememberedDutyWhenConfigured()
+    {
+        HostConfiguration configuration = new(
+            1, 30, 20,
+            new ReturnValveCalibration(JsonHostConfigurationStoreTests.ValidPoints()),
+            DateTimeOffset.UtcNow,
+            lastDutyPercent: 71);
+        var dashboard = new DashboardViewModel(new FakeSession(), configuration, new LogViewModel());
+
+        Assert.Equal(71, dashboard.ConfirmedDuty);
+        Assert.Equal(71, dashboard.PreviewDuty);
+    }
+
+    [Fact]
+    public void RememberedDutyAboveFirmwareLimitIsClampedSoCommitsNeverFail()
+    {
+        // 记忆占空比 90 超过 FakeSession 固件上限 80：必须钳制，否则所有设定点提交会被校验拒绝。
+        HostConfiguration configuration = new(
+            1, 30, 20,
+            new ReturnValveCalibration(JsonHostConfigurationStoreTests.ValidPoints()),
+            DateTimeOffset.UtcNow,
+            lastDutyPercent: 90);
+        var session = new FakeSession { Status = Status(outputMask: 0x01) };
+        var dashboard = new DashboardViewModel(session, configuration, new LogViewModel());
+
+        Assert.Equal(80, dashboard.ConfirmedDuty);
+        Assert.Equal(80, dashboard.PreviewDuty);
+    }
+
+    [Fact]
+    public void RememberedDutyBelowConfigurationMinimumIsClamped()
+    {
+        HostConfiguration configuration = new(
+            1, 45, 20,
+            new ReturnValveCalibration(JsonHostConfigurationStoreTests.ValidPoints()),
+            DateTimeOffset.UtcNow,
+            lastDutyPercent: 25);
+        var dashboard = new DashboardViewModel(new FakeSession(), configuration, new LogViewModel());
+
+        Assert.Equal(45, dashboard.ConfirmedDuty);
+        Assert.Equal(45, dashboard.PreviewDuty);
+    }
+
+    [Fact]
+    public async Task NozzleToggleWhilePwmOffUpdatesPreStartLocallyWithoutSending()
+    {
+        var session = new FakeSession { Status = Status(pwmEnabled: false) };
+        var dashboard = new DashboardViewModel(session, JsonHostConfigurationStoreTests.CreateConfiguration(), new LogViewModel());
+        await dashboard.RefreshAsync();
+
+        Assert.True(dashboard.IsPreStarting);
+        await dashboard.ToggleNozzleAsync(group: 1, right: false);
+
+        Assert.Empty(session.MaskWrites);
+        Assert.Equal((byte)0x01, dashboard.PreStartMask.Value);
+        Assert.Equal((byte)0x00, dashboard.ConfirmedMask.Value);
+
+        await dashboard.ToggleNozzleAsync(group: 1, right: false);
+        Assert.Equal((byte)0x00, dashboard.PreStartMask.Value);
+
+        await dashboard.ToggleNozzleAsync(group: 2, right: true);
+        Assert.Equal((byte)0x08, dashboard.PreStartMask.Value);
+    }
+
+    [Fact]
+    public async Task TurningPwmOnAppliesPreStartMaskThenClearsIt()
+    {
+        var session = new FakeSession { Status = Status(pwmEnabled: false) };
+        var dashboard = new DashboardViewModel(session, JsonHostConfigurationStoreTests.CreateConfiguration(), new LogViewModel());
+        await dashboard.RefreshAsync();
+
+        // 通过 8 个圆盘逐一切换组合出"第3+4组双侧"=0xF0。
+        await dashboard.ToggleNozzleAsync(group: 3, right: false);
+        await dashboard.ToggleNozzleAsync(group: 3, right: true);
+        await dashboard.ToggleNozzleAsync(group: 4, right: false);
+        await dashboard.ToggleNozzleAsync(group: 4, right: true);
+        Assert.Equal((byte)0xF0, dashboard.PreStartMask.Value);
+        Assert.Empty(session.MaskWrites);
+
+        await dashboard.SetPwmEnabledAsync(true);
+
+        // 预启动掩码被下发（FakeSession 不模拟读回，ConfirmedMask 仍为 0）。
+        Assert.Equal(new NozzleMask(0xF0), Assert.Single(session.MaskWrites));
+        Assert.Equal((byte)0x00, dashboard.PreStartMask.Value);
+        Assert.False(dashboard.IsPreStarting);
+    }
+
+    [Fact]
+    public async Task TurningPwmOffClearsPreStartAndSendsAllOffMask()
+    {
+        var session = new FakeSession { Status = Status(outputMask: 0x03) };
+        var dashboard = new DashboardViewModel(session, JsonHostConfigurationStoreTests.CreateConfiguration(), new LogViewModel());
+        await dashboard.RefreshAsync();
+
+        await dashboard.SetPwmEnabledAsync(false);
+
+        Assert.Equal(new NozzleMask(0x00), Assert.Single(session.MaskWrites));
+        Assert.Equal((byte)0x00, dashboard.PreStartMask.Value);
+        Assert.True(dashboard.IsPreStarting);
+    }
+
+    private static ControllerStatus Status(ushort outputMask = 0, bool pwmEnabled = true) =>
+        new(0, 0, 0, 0, 0, 0, 0x0202, pwmEnabled, outputMask, false);
 
     private sealed class FakeSession(ControllerCapabilities? capabilities = null) : IControllerSession
     {
         public bool IsConnected { get; private set; } = true;
         public ControllerCapabilities Capabilities { get; } = capabilities ?? new(2, ControllerCapabilities.ExplicitNozzleMaskFeature);
+        public ControllerParameterLimits ParameterLimits { get; } = ControllerParameterLimits.Default;
         public ControllerStatus Status { get; set; } = Status();
         public Exception? NextFailure { get; set; }
         public int ReadCount { get; private set; }
@@ -173,6 +288,7 @@ public sealed class DashboardViewModelTests
         public Task SetPwmEnabledAsync(bool enabled, CancellationToken cancellationToken = default)
         {
             ThrowNext();
+            Status = Status(pwmEnabled: enabled, outputMask: enabled ? Status.OutputMask : (ushort)0);
             return Task.CompletedTask;
         }
 
@@ -214,6 +330,7 @@ public sealed class DashboardViewModelTests
         public TaskCompletionSource ReleaseSetpointWrite { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
         public bool IsConnected => true;
         public ControllerCapabilities Capabilities { get; } = new(2, ControllerCapabilities.ExplicitNozzleMaskFeature);
+        public ControllerParameterLimits ParameterLimits { get; } = ControllerParameterLimits.Default;
         public ControllerStatus Status { get; private set; } = Status();
         public List<NozzleMask> MaskWrites { get; } = [];
         public List<(ushort Duty, ushort Current)> Setpoints { get; } = [];

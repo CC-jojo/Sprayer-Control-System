@@ -1,7 +1,7 @@
 <UserControl x:Class="SprayerControl.App.Views.SettingsView"
  xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
  xmlns:controls="clr-namespace:SprayerControl.App.Controls" Background="{DynamicResource HmiBackgroundBrush}">
- <Grid Margin="18"><Grid.RowDefinitions><RowDefinition Height="58"/><RowDefinition Height="*"/></Grid.RowDefinitions>
+ <Grid Margin="18"><Grid.RowDefinitions><RowDefinition Height="58"/><RowDefinition Height="*"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
   <Grid><TextBlock Text="设置" Style="{StaticResource HmiHeadingStyle}" FontSize="28" VerticalAlignment="Center"/><Button Content="返回主界面" Style="{StaticResource TouchButtonStyle}" HorizontalAlignment="Right" Click="Back_Click"/></Grid>
   <Grid Grid.Row="1"><Grid.ColumnDefinitions><ColumnDefinition Width="30*"/><ColumnDefinition Width="38*"/><ColumnDefinition Width="32*"/></Grid.ColumnDefinitions>
    <StackPanel Margin="0,0,10,0">
@@ -18,5 +18,19 @@
     <controls:TouchNumericKeypad x:Name="Keypad" Grid.RowSpan="2" Margin="0" Visibility="Collapsed" Panel.ZIndex="10"/>
    </Grid>
   </Grid>
+
+  <!-- 八路电磁阀开关映射：界面开关 → 实际物理电磁阀，本地保存并即时应用。 -->
+  <Border Grid.Row="2" Grid.ColumnSpan="3" Style="{StaticResource HmiCardStyle}" Margin="0,12,0,0">
+   <Grid><Grid.RowDefinitions><RowDefinition Height="32"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
+    <Grid><TextBlock Text="八路电磁阀开关映射" Style="{StaticResource HmiHeadingStyle}"/><TextBlock Text="调整界面开关对应的实际电磁阀；保存后立即生效并本地持久化。" Foreground="{DynamicResource HmiMutedTextBrush}" HorizontalAlignment="Right" VerticalAlignment="Center"/></Grid>
+    <Grid Grid.Row="1" Margin="0,10,0,0"><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+     <UniformGrid x:Name="MappingGrid" Columns="2" />
+     <StackPanel Grid.Column="1" VerticalAlignment="Center" Margin="20,0,0,0">
+      <Button Content="恢复默认映射" Style="{StaticResource TouchButtonStyle}" Click="ResetMapping_Click"/>
+      <Button Content="应用并保存本地" Style="{StaticResource StatusButtonStyle}" Margin="0,10,0,0" Click="Save_Click"/>
+     </StackPanel>
+    </Grid>
+   </Grid>
+  </Border>
  </Grid>
 </UserControl>

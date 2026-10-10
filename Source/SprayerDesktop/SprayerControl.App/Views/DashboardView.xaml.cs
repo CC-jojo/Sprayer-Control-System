@@ -1,8 +1,8 @@
 using System.ComponentModel;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Input;
 using System.Windows.Media;
-using SprayerControl.App.Controls;
 using SprayerControl.App.ViewModels;
 using SprayerControl.Core;
 
@@ -17,26 +17,35 @@ public partial class DashboardView : UserControl
     {
         if (_viewModel is not null) _viewModel.PropertyChanged -= ViewModelChanged;
         _viewModel = viewModel; _demo = demo; DataContext = viewModel; _viewModel.PropertyChanged += ViewModelChanged;
+        Nozzles.NozzleClicked -= OnNozzleClicked;
+        Nozzles.NozzleClicked += OnNozzleClicked;
         Nozzles.ConfirmedMask = viewModel.ConfirmedMask.Value; Nozzles.PreviewMask = viewModel.PreviewMask.Value;
-        Nozzles.Command = new GuardedDelegateCommand(p => Toggle((NozzleCommandParameter)p!), () => _viewModel?.IsNozzleCommandPending != true);
-        DutyGauge.Minimum = viewModel.PwmDutyMinimum; DutyGauge.Maximum = 80; DutyGauge.ReleaseCommand = new DelegateCommand(value => { if (value is double duty) viewModel.PreviewDuty = (int)Math.Round(duty); _ = viewModel.CommitDutyAsync(); });
+        DutyGauge.Minimum = viewModel.PwmDutyMinimum; DutyGauge.Maximum = viewModel.PwmDutyMaximum; DutyGauge.ReleaseCommand = new DelegateCommand(value => { if (value is double duty) viewModel.PreviewDuty = (int)Math.Round(duty); _ = viewModel.CommitDutyAsync(); });
+        DutyGauge.StepDownCommand = new DelegateCommand(_ => StepDuty(-1));
+        DutyGauge.StepUpCommand = new DelegateCommand(_ => StepDuty(1));
         OpeningGauge.Minimum = 0; OpeningGauge.Maximum = 100; OpeningGauge.ReleaseCommand = new DelegateCommand(value => { if (value is double opening) viewModel.PreviewReturnOpening = opening; _ = viewModel.CommitReturnOpeningAsync(); });
+        OpeningGauge.StepDownCommand = new DelegateCommand(_ => StepOpening(-1));
+        OpeningGauge.StepUpCommand = new DelegateCommand(_ => StepOpening(1));
         RecentLog.ItemsSource = viewModel.Log.RecentEntries; RefreshPresentation(demo);
     }
     private void ViewModelChanged(object? sender, PropertyChangedEventArgs e) => Dispatcher.Invoke(() => RefreshPresentation(_demo));
     private void RefreshPresentation(bool demo)
     {
         if (_viewModel is null) return;
-        Nozzles.ConfirmedMask = _viewModel.ConfirmedMask.Value; Nozzles.PreviewMask = _viewModel.PreviewMask.Value; Nozzles.IsPending = _viewModel.IsNozzleCommandPending;
-        DutyGauge.Value = _viewModel.ConfirmedDuty; DutyGauge.PreviewValue = _viewModel.PreviewDuty; DutyGauge.IsPending = _viewModel.IsSetpointCommandPending;
-        OpeningGauge.Value = _viewModel.ConfirmedReturnOpening; OpeningGauge.PreviewValue = _viewModel.PreviewReturnOpening; OpeningGauge.SafetyMinimum = _viewModel.SafetyMinimum; OpeningGauge.IsPending = _viewModel.IsSetpointCommandPending;
-        DutyGauge.Minimum = _viewModel.PwmDutyMinimum;
-        DutyGauge.IsEnabled = _viewModel.IsConnected && _viewModel.CanCommitSetpoints && !_viewModel.IsSetpointCommandPending;
+        bool pwmEnabled = _viewModel.LatestStatus?.PwmEnabled == true;
+        bool preStarting = !pwmEnabled;
+        Nozzles.ConfirmedMask = _viewModel.ConfirmedMask.Value;
+        Nozzles.PreviewMask = preStarting ? _viewModel.PreStartMask.Value : _viewModel.PreviewMask.Value;
+        Nozzles.IsPending = _viewModel.IsNozzleCommandPending; Nozzles.IsPreviewing = false; Nozzles.IsPreStart = preStarting;
+        // 提交期间不再禁用仪表/按钮或变暗进度条（并发安全已由操作门锁保证），
+        // 避免点一个加减按钮导致两个仪表和总开关一起闪。
+        DutyGauge.Value = _viewModel.ConfirmedDuty; DutyGauge.PreviewValue = _viewModel.PreviewDuty; DutyGauge.IsPending = false;
+        OpeningGauge.Value = _viewModel.ConfirmedReturnOpening; OpeningGauge.PreviewValue = _viewModel.PreviewReturnOpening; OpeningGauge.SafetyMinimum = _viewModel.SafetyMinimum; OpeningGauge.IsPending = false;
+        DutyGauge.Minimum = _viewModel.PwmDutyMinimum; DutyGauge.Maximum = _viewModel.PwmDutyMaximum;
+        DutyGauge.IsEnabled = _viewModel.IsConnected && _viewModel.CanCommitSetpoints;
         OpeningGauge.IsEnabled = DutyGauge.IsEnabled;
         bool connected = _viewModel.IsConnected;
         bool pendingNozzles = _viewModel.IsNozzleCommandPending;
-        bool pendingSetpoints = _viewModel.IsSetpointCommandPending;
-        bool pwmEnabled = _viewModel.LatestStatus?.PwmEnabled == true;
         Facts.Text = $"协议 v{_viewModel.Capabilities.ProtocolVersion}\n固件 {(_viewModel.LatestStatus is null ? "--" : $"0x{_viewModel.LatestStatus.FirmwareVersion:X4}")}";
         ConnectionTitle.Text = demo ? "演示控制器已连接" : connected ? "控制器已连接" : "正在查找控制器";
         ConnectionSubtext.Text = demo ? "样例数据不会保存" : connected ? "通信正常" : "自动发现与重连已启用";
@@ -44,28 +53,23 @@ public partial class DashboardView : UserControl
         ConnectionStateDot.Fill = FindBrush(connected ? "HmiPanelBrush" : "HmiRaisedPanelBrush");
         ErrorText.Text = _viewModel.ErrorText;
 
-        LeftMasterButton.IsEnabled = connected && !pendingNozzles && _viewModel.Capabilities.SupportsExplicitNozzleMask;
-        RightMasterButton.IsEnabled = LeftMasterButton.IsEnabled;
-        PresetAllButton.IsEnabled = LeftMasterButton.IsEnabled; Preset234Button.IsEnabled = LeftMasterButton.IsEnabled;
-        Preset34Button.IsEnabled = LeftMasterButton.IsEnabled; Preset4Button.IsEnabled = LeftMasterButton.IsEnabled;
-        PwmMasterButton.IsEnabled = connected && !pendingSetpoints;
-        LeftMasterState.Text = pendingNozzles ? "等待确认" : _viewModel.LeftEnabled ? "已开启" : "已关闭";
-        RightMasterState.Text = pendingNozzles ? "等待确认" : _viewModel.RightEnabled ? "已开启" : "已关闭";
-        LeftMasterState.Foreground = FindBrush(_viewModel.LeftEnabled ? "HmiGreenBrush" : "HmiMutedTextBrush");
-        RightMasterState.Foreground = FindBrush(_viewModel.RightEnabled ? "HmiGreenBrush" : "HmiMutedTextBrush");
-        PwmStateText.Text = pendingSetpoints ? "等待确认" : pwmEnabled ? "已开启" : "已关闭";
-        PwmStateText.Foreground = FindBrush(pwmEnabled ? "HmiGreenBrush" : "HmiMutedTextBrush");
+        Nozzles.IsEnabled = connected && !pendingNozzles && _viewModel.Capabilities.SupportsExplicitNozzleMask;
+        PwmMasterButton.IsEnabled = connected;
+        bool preStartPending = _viewModel.PreStartMask.Value != 0;
+        PwmStateText.Text = pwmEnabled ? "已开启" : preStartPending ? "已关闭 · 预启动待生效" : "已关闭";
+        PwmStateText.Foreground = FindBrush(pwmEnabled ? "HmiGreenBrush" : preStartPending ? "HmiCyanBrush" : "HmiMutedTextBrush");
         SafetyMinimumText.Text = $"安全下限 {_viewModel.SafetyMinimum:F0}%";
         MappedCurrentText.Text = _viewModel.PreviewMappedCurrentMilliamps is double current ? $"映射电流 {current:F3} mA" : "映射电流 -- mA";
         UpdateAuthoritativeReadback(_viewModel.ConfirmedMask);
-        UpdatePresetSelection(_viewModel.ConfirmedMask);
     }
-    private void Toggle(NozzleCommandParameter parameter) { if (_viewModel is not null) _ = _viewModel.ToggleNozzleAsync(parameter.Group, parameter.Right); }
-    private void LeftMaster_Click(object sender, RoutedEventArgs e) { if (_viewModel is not null && !_viewModel.IsNozzleCommandPending) _ = _viewModel.SetLeftMasterAsync(!_viewModel.LeftEnabled); }
-    private void RightMaster_Click(object sender, RoutedEventArgs e) { if (_viewModel is not null && !_viewModel.IsNozzleCommandPending) _ = _viewModel.SetRightMasterAsync(!_viewModel.RightEnabled); }
     private void Pwm_Click(object sender, RoutedEventArgs e) { if (_viewModel is not null && !_viewModel.IsSetpointCommandPending) _ = _viewModel.SetPwmEnabledAsync(_viewModel.LatestStatus?.PwmEnabled != true); }
-    private void Preset_Click(object sender, RoutedEventArgs e) { if (_viewModel is not null && !_viewModel.IsNozzleCommandPending) _ = _viewModel.ApplyCanopyPresetAsync(((Button)sender).Tag?.ToString() switch { "4" => CanopyPreset.Group4, "34" => CanopyPreset.Groups34, "234" => CanopyPreset.Groups234, _ => CanopyPreset.AllGroups }); }
     private void ShowLog_Click(object sender, RoutedEventArgs e) => ShowLogRequested?.Invoke();
+
+    private void OnNozzleClicked(int group, bool right)
+    {
+        if (_viewModel is null || _viewModel.IsNozzleCommandPending) return;
+        _ = _viewModel.ToggleNozzleAsync(group, right);
+    }
 
     private void UpdateAuthoritativeReadback(NozzleMask mask)
     {
@@ -82,24 +86,30 @@ public partial class DashboardView : UserControl
         }
     }
 
-    private void UpdatePresetSelection(NozzleMask mask)
+    private Brush FindBrush(string key) => (Brush)FindResource(key);
+
+    private void StepDuty(int direction)
     {
-        byte groupBits = 0;
-        for (int group = 1; group <= 4; group++) if (mask.IsEnabled(group, false) || mask.IsEnabled(group, true)) groupBits |= (byte)(1 << (group - 1));
-        Button? selected = groupBits switch { 0x0F => PresetAllButton, 0x0E => Preset234Button, 0x0C => Preset34Button, 0x08 => Preset4Button, _ => null };
-        foreach (Button button in new[] { PresetAllButton, Preset234Button, Preset34Button, Preset4Button })
+        if (_viewModel is null || !_viewModel.CanCommitSetpoints || _viewModel.IsSetpointCommandPending)
         {
-            button.BorderBrush = FindBrush(ReferenceEquals(button, selected) ? "HmiCyanBrush" : "HmiBorderBrush");
-            button.Background = ReferenceEquals(button, selected) ? new SolidColorBrush(Color.FromRgb(16, 48, 75)) : FindBrush("HmiRaisedPanelBrush");
+            return;
         }
+
+        int target = (int)Math.Round(DutyGauge.PreviewValue) + direction;
+        _viewModel.PreviewDuty = Math.Clamp(target, (int)DutyGauge.Minimum, (int)DutyGauge.Maximum);
+        _ = _viewModel.CommitDutyAsync();
     }
 
-    private Brush FindBrush(string key) => (Brush)FindResource(key);
+    private void StepOpening(int direction)
+    {
+        if (_viewModel is null || !_viewModel.CanCommitSetpoints || _viewModel.IsSetpointCommandPending)
+        {
+            return;
+        }
+
+        double target = Math.Clamp(OpeningGauge.PreviewValue + direction, OpeningGauge.SafetyMinimum, OpeningGauge.Maximum);
+        _viewModel.PreviewReturnOpening = target;
+        _ = _viewModel.CommitReturnOpeningAsync();
+    }
 }
 internal sealed class DelegateCommand(Action<object?> execute) : System.Windows.Input.ICommand { public event EventHandler? CanExecuteChanged { add { } remove { } } public bool CanExecute(object? parameter) => true; public void Execute(object? parameter) => execute(parameter); }
-internal sealed class GuardedDelegateCommand(Action<object?> execute, Func<bool> canExecute) : System.Windows.Input.ICommand
-{
-    public event EventHandler? CanExecuteChanged { add { } remove { } }
-    public bool CanExecute(object? parameter) => canExecute();
-    public void Execute(object? parameter) { if (canExecute()) execute(parameter); }
-}

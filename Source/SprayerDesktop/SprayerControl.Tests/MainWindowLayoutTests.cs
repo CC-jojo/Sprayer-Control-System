@@ -20,7 +20,8 @@ public sealed class MainWindowLayoutTests
 
                 Assert.Equal(80, gauge.Maximum);
                 Assert.Equal(80, gauge.SafetyMinimum);
-                Assert.InRange(gauge.PreviewValue, gauge.SafetyMinimum, gauge.Maximum);
+                // 预览值只受量程约束；安全下限仅用于着色提示（橙色安全区）。
+                Assert.InRange(gauge.PreviewValue, gauge.Minimum, gauge.Maximum);
             }
             catch (Exception exception)
             {
@@ -77,19 +78,29 @@ public sealed class MainWindowLayoutTests
         string gaugeCode = File.ReadAllText(Path.Combine(controlsDirectory, "SegmentedGaugeControl.xaml.cs"));
         string keypad = File.ReadAllText(Path.Combine(controlsDirectory, "TouchNumericKeypad.xaml"));
         string keypadCode = File.ReadAllText(Path.Combine(controlsDirectory, "TouchNumericKeypad.xaml.cs"));
+        string dashboard = File.ReadAllText(Path.Combine(GetAppDirectory(), "Views", "DashboardView.xaml"));
+        string dashboardCode = File.ReadAllText(Path.Combine(GetAppDirectory(), "Views", "DashboardView.xaml.cs"));
+        string appProject = File.ReadAllText(Path.Combine(GetAppDirectory(), "SprayerControl.App.csproj"));
 
         Assert.Contains("ConfirmedMaskProperty", nozzleCode);
         Assert.Contains("PreviewMaskProperty", nozzleCode);
         Assert.Contains("IsPendingProperty", nozzleCode);
-        Assert.Contains("CommandProperty", nozzleCode);
-        Assert.Contains("byte displayedMask = IsPending ? PreviewMask : ConfirmedMask", nozzleCode);
-        Assert.Contains("button.IsEnabled = !IsPending", nozzleCode);
+        Assert.Contains("IsPreviewingProperty", nozzleCode);
+        Assert.DoesNotContain("CommandProperty", nozzleCode);
+        Assert.DoesNotContain("ICommand", nozzleCode);
+        Assert.Contains("byte displayedMask = IsPending || IsPreviewing || IsPreStart ? PreviewMask : ConfirmedMask", nozzleCode);
+        Assert.DoesNotContain(".IsEnabled", nozzleCode);
         Assert.Contains("AutomationProperties.SetName", nozzleCode);
         Assert.Contains("AutomationProperties.SetHelpText", nozzleCode);
         Assert.Contains("AutomationProperties.SetItemStatus", nozzleCode);
-        Assert.Equal(8, Count(nozzle, "NozzleCommandParameter Group="));
-        Assert.Contains("Group=\"1\" Right=\"False\"", nozzle);
-        Assert.Contains("Group=\"4\" Right=\"True\"", nozzle);
+        Assert.Contains("点击切换喷头开关", nozzleCode);
+        Assert.Contains("<Button", nozzle);
+        Assert.DoesNotContain("NozzleCommandParameter", nozzle);
+        Assert.Contains("Nozzle1LeftButton", nozzle);
+        Assert.Contains("Nozzle1LeftIndicator", nozzle);
+        Assert.Contains("Nozzle4RightIndicator", nozzle);
+        Assert.Equal(8, Count(nozzle, "IsHitTestVisible=\"False\""));
+        Assert.Equal(8, Count(nozzle, "Focusable=\"False\""));
         Assert.Contains("Height=\"*\"", nozzle);
         Assert.Contains("Width=\"*\"", nozzle);
         Assert.Contains("<Ellipse", nozzle);
@@ -98,20 +109,36 @@ public sealed class MainWindowLayoutTests
         Assert.Contains("Viewbox Stretch=\"Uniform\"", nozzle);
         Assert.Contains("喷嘴", nozzle);
 
+        Assert.DoesNotContain("Nozzles.Command", dashboardCode);
+        Assert.Contains("ToggleNozzleAsync", dashboardCode);
+        Assert.DoesNotContain("Preset_Click", dashboardCode);
+        Assert.Contains("x:Name=\"CanopySlider\"", dashboard);
+        Assert.Contains("Orientation=\"Vertical\"", dashboard);
+        Assert.Contains("Minimum=\"1\"", dashboard);
+        Assert.Contains("Maximum=\"4\"", dashboard);
+        Assert.Contains("TickFrequency=\"1\"", dashboard);
+        Assert.Contains("IsSnapToTickEnabled=\"True\"", dashboard);
+        Assert.Contains("IsMoveToPointEnabled=\"True\"", dashboard);
+        Assert.Contains("PreviewMouseLeftButtonUp", dashboard);
+        Assert.Contains("PreviewTouchUp", dashboard);
+        Assert.DoesNotContain("ApplyCanopyPresetAsync", dashboardCode);
+        Assert.Contains("CanopySlider.IsEnabled", dashboardCode);
+        Assert.DoesNotContain("CanopySelector", dashboard);
+        Assert.Contains("Start-Demo.cmd", appProject);
+
         foreach (string property in new[] { "MinimumProperty", "MaximumProperty", "ValueProperty", "PreviewValueProperty", "SafetyMinimumProperty", "IsPendingProperty", "ReleaseCommandProperty" })
         {
             Assert.Contains(property, gaugeCode);
         }
 
-        Assert.Contains("MouseLeftButtonUp", gauge);
-        Assert.Contains("TouchUp", gauge);
-        Assert.Contains("LostMouseCapture", gauge);
-        Assert.Contains("LostTouchCapture", gauge);
-        Assert.Contains("ReleaseCommand.Execute(PreviewValue)", gaugeCode);
+        // 拖动/滑动手势已移除，保留显示与加减按钮。
+        Assert.DoesNotContain("OnMouseLeftButtonDown", gauge);
+        Assert.DoesNotContain("OnTouchDown", gauge);
+        Assert.DoesNotContain("ReleaseCommand.Execute", gaugeCode);
         Assert.Contains("Math.Max(Minimum, SafetyMinimum)", gaugeCode);
         Assert.Contains("CoercePreviewValue", gaugeCode);
-        Assert.Contains("if (IsPending)", gaugeCode);
-        Assert.Contains("!IsEnabled", gaugeCode);
+        Assert.Contains("segment.Opacity = IsPending ? 0.62d : 1d", gaugeCode);
+        Assert.Contains("StepDownCommand", gaugeCode);
         Assert.Contains("AutomationProperties.SetName", gaugeCode);
         Assert.Contains("AutomationProperties.SetHelpText", gaugeCode);
         Assert.Contains("AutomationProperties.SetItemStatus", gaugeCode);
@@ -171,6 +198,7 @@ public sealed class MainWindowLayoutTests
 
         Assert.Contains("周期性真实状态刷新", source);
         Assert.Contains("控制器继续按当前参数独立运行", source);
+        Assert.Contains("已自动保存本地配置", source);
         Assert.DoesNotContain("PWM默认关闭", source);
         Assert.DoesNotContain("PWM由控制器安全关闭", source);
 
@@ -196,12 +224,13 @@ public sealed class MainWindowLayoutTests
         Assert.Contains("SettingsView", shell);
         Assert.Contains("LogView", shell);
         Assert.DoesNotContain("<TextBox", shell);
-        Assert.Contains("40*", dashboard);
-        Assert.Contains("24*", dashboard);
+        Assert.Contains("38*", dashboard);
+        Assert.Contains("26*", dashboard);
         Assert.Contains("36*", dashboard);
+        Assert.Contains("喷头开关控制", dashboard);
         Assert.Contains("NozzleArrayControl", dashboard);
         Assert.Contains("SegmentedGaugeControl", dashboard);
-        Assert.Contains("CanopySelector", dashboard);
+        Assert.DoesNotContain("CanopySelector", dashboard);
         Assert.Contains("NozzleReadbackGrid", dashboard);
         Assert.Contains("ConnectionStateDot", dashboard);
         Assert.Contains("ErrorText", dashboard);

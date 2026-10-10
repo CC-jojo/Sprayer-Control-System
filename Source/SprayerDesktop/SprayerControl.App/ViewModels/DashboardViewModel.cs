@@ -16,6 +16,7 @@ public sealed class DashboardViewModel : ObservableObject
     private ControllerStatus? _latestStatus;
     private NozzleMask _confirmedMask;
     private NozzleMask _previewMask;
+    private NozzleMask _preStartMask;
     private int _confirmedDuty;
     private int _previewDuty;
     private double _confirmedReturnOpening;
@@ -32,7 +33,11 @@ public sealed class DashboardViewModel : ObservableObject
         _configuration = configuration;
         _log = log ?? throw new ArgumentNullException(nameof(log));
         _operationGate = SessionOperationGates.GetValue(session, static _ => new SemaphoreSlim(1, 1));
-        _confirmedDuty = configuration?.PwmDutyMinimum ?? 30;
+        /* 占空比记忆：优先恢复上次使用的占空比，其次安全下限；
+           并按当前固件/配置的 [下限, 上限] 钳制，避免记忆值越界导致后续所有设定点提交被拒。 */
+        int dutyMinimum = configuration?.PwmDutyMinimum ?? 30;
+        int dutyMaximum = Math.Max(dutyMinimum, _session.ParameterLimits.DutyMaximum);
+        _confirmedDuty = Math.Clamp(configuration?.LastDutyPercent ?? dutyMinimum, dutyMinimum, dutyMaximum);
         _previewDuty = _confirmedDuty;
         _confirmedReturnOpening = configuration?.ReturnValveSafetyMinimum ?? 10;
         _previewReturnOpening = _confirmedReturnOpening;
@@ -60,6 +65,17 @@ public sealed class DashboardViewModel : ObservableObject
         get => _previewMask;
         private set => SetProperty(ref _previewMask, value);
     }
+
+    /* 预启动掩码：电磁阀总开关关闭时本地选择，打开总开关后自动下发并清零。 */
+    public NozzleMask PreStartMask
+    {
+        get => _preStartMask;
+        private set => SetProperty(ref _preStartMask, value);
+    }
+
+    public bool IsPreStarting => LatestStatus?.PwmEnabled != true;
+
+    public int PwmDutyMaximum => _session.ParameterLimits.DutyMaximum;
 
     public int ConfirmedDuty
     {
@@ -178,26 +194,44 @@ public sealed class DashboardViewModel : ObservableObject
         }
     }
 
-    public Task ToggleNozzleAsync(int group, bool right, CancellationToken cancellationToken = default) =>
-        SendMaskAsync(mask => mask.WithNozzle(group, right, !mask.IsEnabled(group, right)), cancellationToken);
+    /* 8 个喷头圆盘按钮：总开关关闭（预启动）时本地切换选中，打开时下发固件。 */
+    public Task ToggleNozzleAsync(int group, bool right, CancellationToken cancellationToken = default)
+    {
+        if (IsPreStarting)
+        {
+            PreStartMask = PreStartMask.WithNozzle(group, right, !PreStartMask.IsEnabled(group, right));
+            return Task.CompletedTask;
+        }
+        return SendMaskAsync(mask => mask.WithNozzle(group, right, !mask.IsEnabled(group, right)), cancellationToken);
+    }
 
-    public Task SetLeftMasterAsync(bool enabled, CancellationToken cancellationToken = default) =>
-        SendMaskAsync(mask => mask.WithLeft(enabled), cancellationToken);
-
-    public Task SetRightMasterAsync(bool enabled, CancellationToken cancellationToken = default) =>
-        SendMaskAsync(mask => mask.WithRight(enabled), cancellationToken);
-
-    public Task ApplyCanopyPresetAsync(CanopyPreset preset, CancellationToken cancellationToken = default) =>
-        SendMaskAsync(mask => NozzleMask.ForPreset(
-            preset,
-            leftEnabled: (mask.Value & 0x55) != 0,
-            rightEnabled: (mask.Value & 0xAA) != 0), cancellationToken);
-
+    /* 总开关切换：
+       - 打开：预启动掩码若有选中则先下发再开总开关，随后清空预启动；
+       - 关闭：清空预启动、固件掩码置全关，再关总开关。 */
     public async Task SetPwmEnabledAsync(bool enabled, CancellationToken cancellationToken = default)
     {
         await RunSetpointOperationAsync(async token =>
         {
-            await _session.SetPwmEnabledAsync(enabled, token);
+            if (enabled)
+            {
+                NozzleMask preStart = PreStartMask;
+                if (preStart.Value != 0)
+                {
+                    await _session.SetNozzleMaskAsync(preStart, token);
+                }
+                await _session.SetPwmEnabledAsync(true, token);
+                PreStartMask = NozzleMask.None;
+                _log.Add(preStart.Value != 0
+                    ? "电磁阀总开关已开启，预启动喷头掩码已生效。"
+                    : "电磁阀总开关已开启。");
+            }
+            else
+            {
+                PreStartMask = NozzleMask.None;
+                await _session.SetNozzleMaskAsync(NozzleMask.None, token);
+                await _session.SetPwmEnabledAsync(false, token);
+                _log.Add("电磁阀总开关已关闭，所有喷头已关闭。");
+            }
             await RefreshFromControllerAsync(token);
         }, cancellationToken);
     }
@@ -210,9 +244,10 @@ public sealed class DashboardViewModel : ObservableObject
             return;
         }
 
-        if (duty < _configuration.PwmDutyMinimum || duty > 80)
+        ushort dutyMaximum = _session.ParameterLimits.DutyMaximum;
+        if (duty < _configuration.PwmDutyMinimum || duty > dutyMaximum)
         {
-            RejectSetpointInput($"PWM duty must be from {_configuration.PwmDutyMinimum} through 80 percent.");
+            RejectSetpointInput($"电磁阀占空比必须在 {_configuration.PwmDutyMinimum}% 到 {dutyMaximum}% 之间。");
             return;
         }
 
@@ -229,13 +264,20 @@ public sealed class DashboardViewModel : ObservableObject
             return;
         }
 
-        if (!double.IsFinite(opening) || opening < _configuration.ReturnValveSafetyMinimum || opening > 100)
+        if (!double.IsFinite(opening) || opening > 100)
         {
-            RejectSetpointInput($"Return opening must be from {_configuration.ReturnValveSafetyMinimum} through 100 percent for safety.");
+            RejectSetpointInput("回流阀开度必须在 0% 到 100% 之间。");
             return;
         }
 
-        SetPreviewReturnOpeningValue(opening);
+        /* 低于安全下限时自动钳制到安全下限，操作始终可用；进度条停在安全下限处（橙色安全区顶端）。 */
+        double clamped = Math.Max(opening, _configuration.ReturnValveSafetyMinimum);
+        if (clamped > opening)
+        {
+            _log.Add($"回流阀开度已自动钳制到安全下限 {_configuration.ReturnValveSafetyMinimum:F0}%。");
+        }
+
+        SetPreviewReturnOpeningValue(clamped);
         _setpointInputInvalid = false;
         ErrorText = string.Empty;
     }
@@ -244,16 +286,12 @@ public sealed class DashboardViewModel : ObservableObject
 
     public Task CommitReturnOpeningAsync(CancellationToken cancellationToken = default) => CommitSetpointsAsync(cancellationToken);
 
-    public bool LeftEnabled => (ConfirmedMask.Value & 0x55) != 0;
-
-    public bool RightEnabled => (ConfirmedMask.Value & 0xAA) != 0;
-
     private async Task SendMaskAsync(Func<NozzleMask, NozzleMask> deriveTarget, CancellationToken cancellationToken)
     {
         if (!Capabilities.SupportsExplicitNozzleMask)
         {
             PreviewMask = ConfirmedMask;
-            ReportException(new NotSupportedException("This controller firmware does not support explicit nozzle masks."));
+            ReportException(new NotSupportedException("控制器固件不支持独立的八喷头掩码。"));
             return;
         }
 
@@ -269,7 +307,7 @@ public sealed class DashboardViewModel : ObservableObject
                 await _session.SetNozzleMaskAsync(target, cancellationToken);
                 await RefreshFromControllerAsync(cancellationToken);
                 PreviewMask = ConfirmedMask;
-                _log.Add("Nozzle mask confirmed by controller.");
+                _log.Add("喷头掩码已由控制器确认。");
             }
             finally
             {
@@ -306,10 +344,22 @@ public sealed class DashboardViewModel : ObservableObject
                     return;
                 }
 
-                if (_setpointInputInvalid || dutySnapshot < configuration.PwmDutyMinimum || dutySnapshot > 80 ||
-                    openingSnapshot < configuration.ReturnValveSafetyMinimum || openingSnapshot > 100)
+                ushort dutyMaximum = _session.ParameterLimits.DutyMaximum;
+                if (_setpointInputInvalid)
                 {
-                    RejectSetpointInput("Setpoint preview is outside the configured safety range.");
+                    RejectSetpointInput("设定值预览无效，请重新调整。");
+                    return;
+                }
+
+                if (dutySnapshot < configuration.PwmDutyMinimum || dutySnapshot > dutyMaximum)
+                {
+                    RejectSetpointInput($"电磁阀占空比必须在 {configuration.PwmDutyMinimum}% 到 {dutyMaximum}% 之间。");
+                    return;
+                }
+
+                if (openingSnapshot < configuration.ReturnValveSafetyMinimum || openingSnapshot > 100)
+                {
+                    RejectSetpointInput($"回流阀开度必须在 {configuration.ReturnValveSafetyMinimum}% 到 100% 之间（安全限制）。");
                     return;
                 }
 
@@ -321,7 +371,7 @@ public sealed class DashboardViewModel : ObservableObject
                 await RefreshFromControllerAsync(cancellationToken);
                 ConfirmedDuty = dutySnapshot;
                 ConfirmedReturnOpening = openingSnapshot;
-                _log.Add("PWM duty and return-valve opening confirmed by controller.");
+                _log.Add("电磁阀占空比与回流阀开度已由控制器确认。");
             }
             finally
             {
@@ -381,8 +431,7 @@ public sealed class DashboardViewModel : ObservableObject
         ConfirmedMask = new NozzleMask((byte)status.OutputMask);
         PreviewMask = ConfirmedMask;
         OnPropertyChanged(nameof(IsConnected));
-        OnPropertyChanged(nameof(LeftEnabled));
-        OnPropertyChanged(nameof(RightEnabled));
+        OnPropertyChanged(nameof(IsPreStarting));
     }
 
     private void RejectSetpointInput(string message)

@@ -51,7 +51,7 @@ public sealed class JsonHostConfigurationStore : IHostConfigurationStore
         }
         catch (Exception exception) when (exception is JsonException or ArgumentException or IOException)
         {
-            throw new InvalidDataException("Host configuration file is invalid.", exception);
+            throw new InvalidDataException("主机配置文件无效。", exception);
         }
     }
 
@@ -63,7 +63,7 @@ public sealed class JsonHostConfigurationStore : IHostConfigurationStore
         string? temporaryPath = null;
         try
         {
-            string directory = Path.GetDirectoryName(_path) ?? throw new InvalidOperationException("Configuration path must include a directory.");
+            string directory = Path.GetDirectoryName(_path) ?? throw new InvalidOperationException("配置路径必须包含目录。");
             Directory.CreateDirectory(directory);
             temporaryPath = Path.Combine(directory, $"{Path.GetFileName(_path)}.{Guid.NewGuid():N}.tmp");
             await WriteTemporaryFileAsync(temporaryPath, validated, cancellationToken);
@@ -94,11 +94,11 @@ public sealed class JsonHostConfigurationStore : IHostConfigurationStore
         if (configuration.SchemaVersion != AcceptedSchemaVersion)
         {
             throw new InvalidDataException(
-                $"Host configuration schema must be exactly {AcceptedSchemaVersion}.",
+                $"主机配置结构版本必须为 {AcceptedSchemaVersion}。",
                 new ArgumentOutOfRangeException(
                     nameof(configuration.SchemaVersion),
                     configuration.SchemaVersion,
-                    "Unsupported configuration schema."));
+                    "不支持的配置结构版本。"));
         }
 
         try
@@ -108,11 +108,13 @@ public sealed class JsonHostConfigurationStore : IHostConfigurationStore
                 configuration.PwmDutyMinimum,
                 configuration.ReturnValveSafetyMinimum,
                 new ReturnValveCalibration(configuration.ReturnValveCalibration.Points),
-                configuration.LastModifiedUtc);
+                configuration.LastModifiedUtc,
+                configuration.NozzleMapping,
+                configuration.LastDutyPercent);
         }
         catch (Exception exception) when (exception is ArgumentException or InvalidOperationException)
         {
-            throw new InvalidDataException("Host configuration values are invalid.", exception);
+            throw new InvalidDataException("主机配置值无效。", exception);
         }
     }
 

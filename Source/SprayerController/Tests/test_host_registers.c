@@ -3,6 +3,7 @@
 #include "config_store.h"
 #include "host_modbus.h"
 #include "modbus_crc.h"
+#include "app_config.h"
 
 #include <assert.h>
 #include <stdbool.h>
@@ -47,22 +48,24 @@ static void TestDefaultsAndExistingRegisters(void)
     HostRegisters registers;
     HostRegisters_Init(&registers);
 
-    assert(registers.config.mode == SPRAY_ALL);
-    assert(registers.config.nozzle_mask == 0xFFU);
-    assert(registers.config.duty == 30U);
-    assert(registers.config.duty_min == 30U);
-    assert(registers.config.duty_max == 80U);
+    /* P1-1：上电默认全关（SPRAY_ALL_OFF、掩码 0、PWM 关闭），
+       等上位机连接后由操作员显式开启，避免上电瞬间误喷洒。 */
+    assert(registers.config.mode == SPRAY_ALL_OFF);
+    assert(registers.config.nozzle_mask == 0x00U);
+    assert(registers.config.duty == APP_PWM_MIN_DEFAULT);
+    assert(registers.config.duty_min == APP_PWM_MIN_DEFAULT);
+    assert(registers.config.duty_max == APP_PWM_MAX_DEFAULT);
     assert(!registers.config.persistence_enabled);
     assert(registers.config.target_current_ua == 0U);
-    assert(HostRegisters_GetOutputMask(&registers) == 0xFFU);
+    assert(HostRegisters_GetOutputMask(&registers) == 0x00U);
 
-    ExpectRead(&registers, 0x0000U, SPRAY_ALL);
-    ExpectRead(&registers, 0x0001U, 30U);
-    ExpectRead(&registers, 0x0006U, 30U);
-    ExpectRead(&registers, 0x0007U, 80U);
+    ExpectRead(&registers, 0x0000U, SPRAY_ALL_OFF);
+    ExpectRead(&registers, 0x0001U, APP_PWM_MIN_DEFAULT);
+    ExpectRead(&registers, 0x0006U, APP_PWM_MIN_DEFAULT);
+    ExpectRead(&registers, 0x0007U, APP_PWM_MAX_DEFAULT);
     ExpectRead(&registers, 0x0008U, 0U);
     ExpectRead(&registers, 0x0009U, 0U);
-    ExpectRead(&registers, 0x000BU, 1U);
+    ExpectRead(&registers, 0x000BU, 0U);
 }
 
 static void TestLegacyModesAlwaysDeriveTheirMasks(void)
@@ -127,17 +130,40 @@ static void TestModeMaskSynchronizationAndCapabilities(void)
 
     ExpectRead(&registers, 0x010AU, 2U);
     ExpectRead(&registers, 0x010BU, 0x0001U);
+    ExpectRead(&registers, 0x010CU, APP_PWM_MIN_DEFAULT);
+    ExpectRead(&registers, 0x010DU, APP_PWM_MAX_DEFAULT);
+    ExpectRead(&registers, 0x010EU, APP_CURRENT_MAX_UA);
+}
+
+static void TestDutyLimitsAreConfigurableAndReported(void)
+{
+    HostRegisters registers;
+    HostRegisters_Init(&registers);
+    /* 完整配置写入，占空比下限放宽到 40、上限 70，电流上限 15000。 */
+    const uint16_t values[] = { 4U, 55U, 0U, 0U, 0U, 0U, 40U, 70U, 1U, 15000U };
+    assert(HostRegisters_WriteBatch(&registers, 0x0000U, values, 10U) == MB_OK);
+    assert(registers.config.duty_min == 40U);
+    assert(registers.config.duty_max == 70U);
+    ExpectRead(&registers, 0x0006U, 40U);
+    ExpectRead(&registers, 0x0007U, 70U);
+
+    /* 占空比必须落在 [min,max] 内：duty=90 超过上限 70，应被拒绝。 */
+    const uint16_t rejected_values[] = { 4U, 90U, 0U, 0U, 0U, 0U, 40U, 70U, 1U, 15000U };
+    assert(HostRegisters_WriteBatch(&registers, 0x0000U, rejected_values, 10U) == MB_ILLEGAL_VALUE);
+    assert(registers.config.duty == 55U);
+    assert(registers.config.duty_min == 40U);
+    assert(registers.config.duty_max == 70U);
 }
 
 static void TestExistingWritableRegistersRemainCompatible(void)
 {
     HostRegisters registers;
     HostRegisters_Init(&registers);
-    const uint16_t values[] = { 35U, 0U, 0U, 0U, 0U, 30U, 80U, 1U, 20000U };
+    const uint16_t values[] = { 4U, 35U, 0U, 0U, 0U, 0U, 30U, 80U, 1U, 20000U };
     const uint16_t save_key = 0xA55AU;
     const uint16_t pwm_off = 0U;
 
-    assert(HostRegisters_WriteBatch(&registers, 0x0001U, values, 9U) == MB_OK);
+    assert(HostRegisters_WriteBatch(&registers, 0x0000U, values, 10U) == MB_OK);
     assert(registers.config.duty == 35U);
     assert(registers.config.persistence_enabled);
     assert(registers.config.target_current_ua == 20000U);
@@ -147,6 +173,29 @@ static void TestExistingWritableRegistersRemainCompatible(void)
     ExpectRead(&registers, 0x000BU, 0U);
 }
 
+static void TestRuntimeSetpointsDoNotClearPersistence(void)
+{
+    HostRegisters registers;
+    HostRegisters_Init(&registers);
+
+    /* 先通过完整配置写入开启持久化。 */
+    const uint16_t full_values[] = { 4U, 35U, 0U, 0U, 0U, 0U, 30U, 80U, 1U, 20000U };
+    assert(HostRegisters_WriteBatch(&registers, 0x0000U, full_values, 10U) == MB_OK);
+    assert(registers.config.persistence_enabled);
+
+    /* 运行设定点批量写（从 0x0001 起）：即使携带 persistence=0 也必须被忽略。 */
+    const uint16_t setpoint_values[] = { 40U, 0U, 0U, 0U, 0U, 30U, 80U, 0U, 5000U };
+    assert(HostRegisters_WriteBatch(&registers, 0x0001U, setpoint_values, 9U) == MB_OK);
+    assert(registers.config.duty == 40U);
+    assert(registers.config.target_current_ua == 5000U);
+    assert(registers.config.persistence_enabled);
+
+    /* 单独写 0x0008 仍可关闭持久化（显式操作）。 */
+    const uint16_t disable = 0U;
+    assert(HostRegisters_WriteBatch(&registers, 0x0008U, &disable, 1U) == MB_OK);
+    assert(!registers.config.persistence_enabled);
+}
+
 static void TestRuntimeReportsVersionAndPwmGatedCustomOutput(void)
 {
     AppRuntime runtime;
@@ -154,6 +203,8 @@ static void TestRuntimeReportsVersionAndPwmGatedCustomOutput(void)
     AppRuntime_Init(&runtime, 1U, 1U);
     ExpectRead(&runtime.host, 0x0106U, 0x0202U);
 
+    /* P1-1：PWM 上电默认关闭；测试显式开启后再验证输出。 */
+    runtime.host.pwm_enabled = true;
     ControllerConfig_SetDefaults(&config);
     config.mode = SPRAY_CUSTOM;
     config.nozzle_mask = 0x40U;
@@ -260,7 +311,9 @@ int main(void)
     TestExplicitMaskWriteReadAndEdges();
     TestInvalidMaskIsAtomic();
     TestModeMaskSynchronizationAndCapabilities();
+    TestDutyLimitsAreConfigurableAndReported();
     TestExistingWritableRegistersRemainCompatible();
+    TestRuntimeSetpointsDoNotClearPersistence();
     TestRuntimeReportsVersionAndPwmGatedCustomOutput();
     TestInvalidModesAreRejectedAndUseSafeFallback();
     TestExplicitMaskWireFrames();

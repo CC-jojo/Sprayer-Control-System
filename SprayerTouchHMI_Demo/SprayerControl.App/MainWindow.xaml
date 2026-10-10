@@ -1,0 +1,33 @@
+<Window x:Class="SprayerControl.App.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:views="clr-namespace:SprayerControl.App.Views"
+        Title="施药机控制系统" WindowStyle="None" WindowState="Maximized"
+        Background="{DynamicResource HmiBackgroundBrush}" MinWidth="640" MinHeight="360"
+        ResizeMode="NoResize">
+    <!-- 外层网格铺满窗口；内层 RootLayout 为 1920×1080 设计稿，由 AdaptiveLayoutManager 按实际屏幕自动缩放并居中 -->
+    <Grid Background="{DynamicResource HmiBackgroundBrush}">
+        <Grid x:Name="RootLayout" Width="1920" Height="1080" HorizontalAlignment="Center" VerticalAlignment="Center">
+            <Grid.RowDefinitions><RowDefinition Height="80" /><RowDefinition Height="*" /></Grid.RowDefinitions>
+            <Border Background="{DynamicResource HmiBackgroundBrush}" BorderBrush="{DynamicResource HmiBorderBrush}" BorderThickness="0,0,0,1" Padding="24,0">
+                <DockPanel LastChildFill="False">
+                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center" DockPanel.Dock="Left">
+                        <TextBlock Text="施药机控制系统" Style="{StaticResource HmiHeadingStyle}" FontSize="34" />
+                        <TextBlock Text="北京市农林科学院智能装备技术研究中心" Foreground="{DynamicResource HmiMutedTextBrush}" FontSize="26" FontWeight="SemiBold" FontFamily="宋体" VerticalAlignment="Bottom" Margin="16,0,0,4" />
+                    </StackPanel>
+                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center" DockPanel.Dock="Right">
+                        <Ellipse x:Name="HeaderConnectionDot" Width="18" Height="18" Fill="{DynamicResource HmiAmberBrush}" Margin="0,0,10,0" />
+                        <TextBlock x:Name="ConnectionText" Text="正在自动查找控制器" Foreground="{DynamicResource HmiGreenBrush}" FontSize="20" VerticalAlignment="Center" Margin="0,0,28,0" />
+                        <Border Width="1" Height="40" Background="{DynamicResource HmiBorderBrush}" Margin="0,0,22,0"/>
+                        <Button Content="⚙  设置" FontSize="20" Style="{StaticResource TouchButtonStyle}" MinWidth="120" MinHeight="56" Click="ShowSettings_Click" />
+                    </StackPanel>
+                </DockPanel>
+            </Border>
+            <Grid Grid.Row="1">
+                <views:DashboardView x:Name="Dashboard" />
+                <views:SettingsView x:Name="Settings" Visibility="Collapsed" />
+                <views:LogView x:Name="Log" Visibility="Collapsed" />
+            </Grid>
+        </Grid>
+    </Grid>
+</Window>

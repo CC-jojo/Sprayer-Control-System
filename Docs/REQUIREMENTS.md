@@ -9,7 +9,7 @@
 
 - The primary interface is a dark native-WPF, three-column, landscape touchscreen HMI. It must respond correctly at 16:9 and 16:10, including 1920x1080, 1366x768, 1600x900, 1280x800 and 1920x1200 with Windows scaling.
 - Use responsive Grid star sizing, bounded minimum sizes, uniform circular controls and no non-uniform whole-screen stretching. Main touch targets are at least 56x56 DIP; frequently used controls are at least 64x64 DIP.
-- The dashboard has eight independently controlled nozzles (four groups, left and right), left/right side masters, and the Group 4 / Groups 3+4 / Groups 2+3+4 / All-groups presets. A custom mask remains custom.
+- The dashboard shows eight nozzle rings (four groups, left and right) as pure status indicators that are never individual touch controls. Left/right side masters and a four-position vertical canopy-height slider apply the Group 4 / Groups 3+4 / Groups 2+3+4 / All-groups presets; a custom mask remains custom.
 - Controller readback, not the most recent UI command, is the authoritative nozzle and PWM state. Commands show preview, pending, confirmed, or rollback/failure state and prevent conflicting duplicate writes.
 
 ## PWM and return valve

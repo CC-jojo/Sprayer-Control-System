@@ -12,7 +12,7 @@ bool ConfigStore_Encode(const ControllerConfig*c,uint8_t*r,size_t size)
     if(size<CONFIG_STORE_RECORD_SIZE||!ControllerConfig_IsValid(c))return false;
     w32(r,CONFIG_MAGIC);w16(r+4,CONFIG_VERSION);w16(r+6,CONFIG_PAYLOAD_SIZE);
     r[8]=(uint8_t)c->mode;r[9]=c->duty;for(uint8_t i=0;i<4;i++)r[10+i]=0U;
-    r[14]=30U;r[15]=80U;r[16]=c->persistence_enabled?1U:0U;w16(r+17,c->target_current_ua);
+    r[14]=c->duty_min;r[15]=c->duty_max;r[16]=c->persistence_enabled?1U:0U;w16(r+17,c->target_current_ua);
     r[19]=c->mode==SPRAY_CUSTOM?c->nozzle_mask:ControllerConfig_GetLegacyMask(c->mode);
     w32(r+CONFIG_CRC_OFFSET,crc32(r,CONFIG_CRC_OFFSET));return true;
 }

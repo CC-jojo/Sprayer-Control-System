@@ -19,6 +19,7 @@ public sealed class ControllerSessionTests
         Assert.True(session.Capabilities.SupportsExplicitNozzleMask);
         Assert.Equal(1, channel.CapabilityReads);
         Assert.Equal((ushort)2, session.Capabilities.ProtocolVersion);
+        Assert.Equal(new ControllerParameterLimits(30, 80, 20000), session.ParameterLimits);
     }
 
     [Fact]
@@ -33,7 +34,7 @@ public sealed class ControllerSessionTests
         NotSupportedException exception = await Assert.ThrowsAsync<NotSupportedException>(() =>
             session.SetNozzleMaskAsync(new NozzleMask(0xA5)));
 
-        Assert.Contains("firmware", exception.Message, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("固件", exception.Message);
         Assert.Equal(1, channel.CapabilityReads);
         Assert.Empty(channel.MaskWrites);
     }
@@ -55,7 +56,8 @@ public sealed class ControllerSessionTests
         await session.DisposeAsync();
         await session.DisposeAsync();
 
-        Assert.Equal(new byte[] { 0xA5 }, channel.MaskWrites);
+        // 界面 0xA5 按接线映射为物理 0x63 后写固件。
+        Assert.Equal(new byte[] { 0x63 }, channel.MaskWrites);
         Assert.Equal(1, owned.DisposeCount);
         Assert.False(session.IsConnected);
         await Assert.ThrowsAsync<ObjectDisposedException>(() => session.ReadStatusAsync());
@@ -70,6 +72,50 @@ public sealed class ControllerSessionTests
         await session.SavePowerOnDefaultsAsync(new NozzleMask(0xF0), 60, 7800);
 
         Assert.Equal(["10:0000", "06:000C", "06:000A"], channel.Writes);
+    }
+
+    [Fact]
+    public async Task ModbusSessionMapsNozzleMaskBetweenUiAndPhysicalAtTheFirmwareBoundary()
+    {
+        var channel = new SessionChannel
+        {
+            CapabilityResponse = ModbusRtuCodec.WithCrc([0x01, 0x03, 0x04, 0x00, 0x02, 0x00, 0x01]),
+            StatusOutputMask = 0x20
+        };
+        await using ModbusControllerSession session = await ModbusControllerSession.CreateAsync(new ControllerClient(channel));
+
+        // 界面 左一(bit0) 下发 → 固件物理 左四(bit6)。
+        await session.SetNozzleMaskAsync(new NozzleMask(0x01));
+        Assert.Equal((byte)0x40, Assert.Single(channel.MaskWrites));
+
+        // 固件物理 bit5 读回 → 界面 bit7（右侧第4组）。
+        ControllerStatus status = await session.ReadStatusAsync();
+        Assert.Equal((ushort)0x80, status.OutputMask);
+    }
+
+    [Fact]
+    public async Task UpdateNozzleMappingReplacesTheFieldMappingForBothDirections()
+    {
+        var channel = new SessionChannel
+        {
+            CapabilityResponse = ModbusRtuCodec.WithCrc([0x01, 0x03, 0x04, 0x00, 0x02, 0x00, 0x01]),
+            StatusOutputMask = 0x01,
+        };
+        await using ModbusControllerSession session = await ModbusControllerSession.CreateAsync(new ControllerClient(channel));
+
+        // 恒等映射：界面 左一(bit0) → 物理 bit0。
+        session.UpdateNozzleMapping([0, 1, 2, 3, 4, 5, 6, 7]);
+        await session.SetNozzleMaskAsync(new NozzleMask(0x01));
+        Assert.Equal((byte)0x01, Assert.Single(channel.MaskWrites));
+        ControllerStatus identityStatus = await session.ReadStatusAsync();
+        Assert.Equal((ushort)0x01, identityStatus.OutputMask);
+
+        // 换映射：界面 左一(bit0) → 物理 左三(bit4)；物理 bit0 → 界面 左三(bit4)。
+        session.UpdateNozzleMapping([4, 1, 2, 3, 0, 5, 6, 7]);
+        await session.SetNozzleMaskAsync(new NozzleMask(0x01));
+        Assert.Equal((byte)0x10, channel.MaskWrites[^1]);
+        ControllerStatus remapped = await session.ReadStatusAsync();
+        Assert.Equal((ushort)0x10, remapped.OutputMask);
     }
 
     [Fact]
@@ -243,6 +289,7 @@ public sealed class ControllerSessionTests
     private sealed class SessionChannel : IModbusChannel
     {
         public byte[] CapabilityResponse { get; init; } = [];
+        public byte StatusOutputMask { get; init; }
         public int CapabilityReads { get; private set; }
         public List<byte> MaskWrites { get; } = [];
         public List<string> Writes { get; } = [];
@@ -256,6 +303,13 @@ public sealed class ControllerSessionTests
                 return Task.FromResult(CapabilityResponse);
             }
 
+            /* 参数限制能力区（0x010C~0x010E）：返回 30 / 80 / 20000。 */
+            if (request[1] == 0x03 && request[2] == 0x01 && request[3] == 0x0C)
+            {
+                return Task.FromResult(ModbusRtuCodec.WithCrc([
+                    0x01, 0x03, 0x06, 0x00, 0x1E, 0x00, 0x50, 0x4E, 0x20]));
+            }
+
             if (request[1] == 0x06 && request[2] == 0x00 && request[3] == 0x0C)
                 MaskWrites.Add(request[5]);
             if (request[1] is 0x06 or 0x10)
@@ -265,7 +319,8 @@ public sealed class ControllerSessionTests
             {
                 return Task.FromResult(ModbusRtuCodec.WithCrc([
                     0x01, 0x03, 0x14,
-                    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x02, 0x02, 0, 0, 0, 0, 0, 0]));
+                    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x02, 0x02, 0, 1,
+                    (byte)(StatusOutputMask >> 8), (byte)StatusOutputMask, 0, 0]));
             }
 
             return Task.FromResult(request[1] == 0x10

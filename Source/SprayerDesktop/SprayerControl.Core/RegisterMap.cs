@@ -20,4 +20,7 @@ public static class RegisterMap
     public const ushort StatusCount = 10;
     public const ushort CapabilityStart = 0x010A;
     public const ushort CapabilityCount = 2;
+    public const ushort DutyMinCapability = 0x010C;
+    public const ushort DutyMaxCapability = 0x010D;
+    public const ushort CurrentLimitCapability = 0x010E;
 }

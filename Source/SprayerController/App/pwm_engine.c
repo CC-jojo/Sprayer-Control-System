@@ -4,7 +4,9 @@ enum
 {
     PWM_CHANNEL_COUNT = 8,
     PWM_PERIOD_TICKS = 200,
-    PWM_DEFAULT_DUTY = 60   //上电默认占空比
+    /* 上电默认占空比：保持 0，等待业务层用 Flash 配置（或安全默认）提交后再输出，
+       避免上电瞬间到配置加载完成前以未知占空比驱动电磁阀。 */
+    PWM_DEFAULT_DUTY = 0
 };
 
 /* Bit order: L1, R1, L2, R2, L3, R3, L4, R4. */

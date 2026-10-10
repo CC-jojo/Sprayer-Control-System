@@ -13,7 +13,11 @@ public sealed class JsonHostConfigurationStoreTests : IDisposable
     {
         string path = Path.Combine(_directory, "host-configuration.json");
         DateTimeOffset timestamp = new(2026, 8, 12, 9, 30, 0, TimeSpan.FromHours(8));
-        HostConfiguration configuration = CreateConfiguration(45, timestamp);
+        HostConfiguration configuration = new(
+            1, 45, 20,
+            new ReturnValveCalibration(ValidPoints()),
+            timestamp,
+            lastDutyPercent: 66);
         var store = new JsonHostConfigurationStore(path);
 
         await store.SaveAsync(configuration);
@@ -23,6 +27,8 @@ public sealed class JsonHostConfigurationStoreTests : IDisposable
         Assert.Equal(45, loaded.PwmDutyMinimum);
         Assert.Equal(timestamp.ToUniversalTime(), loaded.LastModifiedUtc);
         Assert.Equal(Enumerable.Range(1, 10).Select(index => index * 10), loaded.ReturnValveCalibration.Points.Select(point => point.OpeningPercent));
+        Assert.Equal(NozzleMask.DefaultUiToPhysicalBit, loaded.NozzleMapping);
+        Assert.Equal(66, loaded.LastDutyPercent);
     }
 
     [Fact]
