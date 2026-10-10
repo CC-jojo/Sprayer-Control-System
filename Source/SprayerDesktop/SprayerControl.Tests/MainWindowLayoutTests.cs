@@ -142,7 +142,7 @@ public sealed class MainWindowLayoutTests
 
         // 安全下限按钮：位于减号与加号之间、数字圆盘下方，只在绑定命令的仪表上显示。
         Assert.Contains("SafetyFloorButton", gauge);
-        Assert.Contains("Content=\"安全下限\"", gauge);
+        Assert.Contains("Text=\"安全&#10;下限\"", gauge);
         Assert.Contains("HorizontalAlignment=\"Center\"", gauge);
         Assert.Contains("OpeningGauge.SafetyFloorCommand", dashboardCode);
         Assert.Contains("ApplySafetyFloor", dashboardCode);
@@ -177,7 +177,7 @@ public sealed class MainWindowLayoutTests
         Assert.Contains("SafetyFloorCommandProperty", gaugeCode);
         Assert.Contains("SafetyFloorButtonStyle", gauge);
         Assert.Contains("x:Name=\"SafetyFloorButton\"", gauge);
-        Assert.Contains("Content=\"安全下限\"", gauge);
+        Assert.Contains("Text=\"安全&#10;下限\"", gauge);
 
         // 只有回流阀仪表绑定该命令，占空比仪表不绑定；切换逻辑在视图模型里。
         Assert.Contains("OpeningGauge.SafetyFloorCommand", dashboardCode);

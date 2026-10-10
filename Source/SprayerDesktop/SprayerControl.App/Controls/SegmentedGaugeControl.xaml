@@ -44,9 +44,9 @@
         </Style>
         <!-- 安全下限按钮：一键把开度拉到安全下限（琥珀色，与仪表安全区呼应） -->
         <Style x:Key="SafetyFloorButtonStyle" TargetType="Button">
-            <Setter Property="Height" Value="28" />
-            <Setter Property="MinWidth" Value="64" />
-            <Setter Property="FontSize" Value="13" />
+            <Setter Property="Width" Value="32" />
+            <Setter Property="Height" Value="32" />
+            <Setter Property="FontSize" Value="10" />
             <Setter Property="FontWeight" Value="SemiBold" />
             <Setter Property="Foreground" Value="{DynamicResource HmiAmberBrush}" />
             <Setter Property="Background" Value="{DynamicResource HmiRaisedPanelBrush}" />
@@ -57,7 +57,7 @@
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="Button">
-                        <Border x:Name="BtnBorder" Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="{TemplateBinding BorderThickness}" CornerRadius="22">
+                        <Border x:Name="BtnBorder" Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="{TemplateBinding BorderThickness}" CornerRadius="6">
                             <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" />
                         </Border>
                         <ControlTemplate.Triggers>
@@ -139,9 +139,10 @@
             <!-- 安全下限按钮：位于减号与加号之间、数字圆盘正下方 -->
             <Button x:Name="SafetyFloorButton" Style="{StaticResource SafetyFloorButtonStyle}"
                     HorizontalAlignment="Center" VerticalAlignment="Bottom" Margin="0,0,0,24"
-                    Content="安全下限"
                     Command="{Binding SafetyFloorCommand, ElementName=Root}"
-                    IsEnabled="{Binding IsEnabled, ElementName=Root}" />
+                    IsEnabled="{Binding IsEnabled, ElementName=Root}">
+                <TextBlock Text="安全&#10;下限" TextAlignment="Center" LineHeight="13" LineStackingStrategy="BlockLineHeight" />
+            </Button>
         </Grid>
     </Viewbox>
 </UserControl>
