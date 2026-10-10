@@ -192,11 +192,18 @@ public partial class MainWindow : Window
                 dutyMinimum,
                 dutyMaximum);
             _dashboard.PreviewDuty = restoredDuty;
-            _dashboard.PreviewReturnOpening = 100;
+            /* 回流阀启动值：开关打开 → 上电默认开度；开关关闭 → 继承上次开度
+               （没有记忆值时退回 100% 安全全开）。低于安全下限时由仪表盘自动钳制。 */
+            double restoredOpening = restore.PowerOnReturnValveEnabled
+                ? restore.PowerOnReturnValvePercent
+                : restore.LastReturnOpeningPercent ?? 100;
+            _dashboard.PreviewReturnOpening = restoredOpening;
             try
             {
                 await _dashboard.CommitReturnOpeningAsync(token);
-                _log.Add($"启动恢复：电磁阀占空比 {_dashboard.ConfirmedDuty}%，回流阀开度 100%。");
+                _log.Add(restore.PowerOnReturnValveEnabled
+                    ? $"启动恢复：电磁阀占空比 {_dashboard.ConfirmedDuty}%，回流阀开度 {_dashboard.ConfirmedReturnOpening:F0}%（上电默认值）。"
+                    : $"启动恢复：电磁阀占空比 {_dashboard.ConfirmedDuty}%，回流阀开度 {_dashboard.ConfirmedReturnOpening:F0}%（继承上次开度）。");
             }
             catch (Exception exception)
             {
@@ -247,12 +254,17 @@ public partial class MainWindow : Window
     {
         if (_demo || _session?.IsConnected != true || _dashboard is null || _settings?.SavedConfiguration is not HostConfiguration configuration)
             throw new InvalidOperationException("当前状态不允许保存控制器上电默认值。");
-        /* 需求3A：上电默认值固定以回流阀 100% 全开电流保存（安全位），
-           控制器单独上电即自动把比例阀调至 100% 全开。 */
-        double current = configuration.ReturnValveCalibration.CurrentMilliampsAt(100, configuration.ReturnValveSafetyMinimum);
+        /* 回流阀上电默认值：开关打开用设置页设定的开度（不再写死 100%）；
+           开关关闭时用当前确认开度，让控制器单独上电也尽量接近"继承上次状态"。 */
+        double powerOnOpening = configuration.PowerOnReturnValveEnabled
+            ? configuration.PowerOnReturnValvePercent
+            : _dashboard.ConfirmedReturnOpening;
+        double current = configuration.ReturnValveCalibration.CurrentMilliampsAt(powerOnOpening, configuration.ReturnValveSafetyMinimum);
         ushort microamps = checked((ushort)Math.Round(current * 1000, MidpointRounding.AwayFromZero));
         await _session.SavePowerOnDefaultsAsync(_dashboard.ConfirmedMask, (ushort)_dashboard.ConfirmedDuty, microamps, token);
-        _log.Add("喷嘴掩码、占空比和回流阀电流已保存为控制器上电默认值（回流阀上电为 100% 全开）。");
+        _log.Add(configuration.PowerOnReturnValveEnabled
+            ? $"喷嘴掩码、占空比和回流阀电流已保存为控制器上电默认值（回流阀上电为 {powerOnOpening:F0}%）。"
+            : $"喷嘴掩码、占空比和回流阀电流已保存为控制器上电默认值（回流阀上电为当前开度 {powerOnOpening:F0}%）。");
     }
 
     private void SetHeaderConnection(string text, bool connected, bool error = false)
@@ -281,7 +293,12 @@ public partial class MainWindow : Window
             if (!_demo && _settings is not null)
             {
                 if (_dashboard is not null)
+                {
                     _settings.LastDutyPercent = _dashboard.ConfirmedDuty;
+                    /* 关闭"上电默认回流阀"时启动恢复会继承这个开度，因此退出时记录当前确认值。 */
+                    _settings.LastReturnOpeningPercent = _dashboard.ConfirmedReturnOpening;
+                }
+
                 bool saved = await _settings.SaveAsync(CancellationToken.None);
                 if (saved)
                     _log.Add("退出时已自动保存本地配置。");

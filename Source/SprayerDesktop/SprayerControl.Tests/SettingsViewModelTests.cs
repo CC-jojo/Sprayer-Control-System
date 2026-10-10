@@ -174,6 +174,44 @@ public sealed class SettingsViewModelTests
         Assert.Equal(8, settings.NozzleMappingEntries.Count);
     }
 
+    [Fact]
+    public async Task PowerOnReturnValveSettingsArePersistedAndReloaded()
+    {
+        var store = new RecordingStore();
+        var settings = new SettingsViewModel(store);
+        settings.ReturnValveSafetyMinimum = 30;
+        settings.PowerOnReturnValveEnabled = true;
+        settings.PowerOnReturnValvePercent = 65;
+        settings.LastReturnOpeningPercent = 45;
+        for (int opening = 10; opening <= 100; opening += 10)
+            settings.SetCalibrationCurrent(opening, opening / 100.0);
+
+        Assert.True(await settings.SaveAsync());
+        HostConfiguration saved = settings.SavedConfiguration!;
+        Assert.True(saved.PowerOnReturnValveEnabled);
+        Assert.Equal(65, saved.PowerOnReturnValvePercent);
+        Assert.Equal(45d, saved.LastReturnOpeningPercent!.Value);
+
+        var reloaded = new SettingsViewModel(store, saved);
+        Assert.True(reloaded.PowerOnReturnValveEnabled);
+        Assert.Equal(65, reloaded.PowerOnReturnValvePercent);
+        Assert.Equal(45d, reloaded.LastReturnOpeningPercent!.Value);
+    }
+
+    [Fact]
+    public async Task PowerOnReturnValveBelowSafetyFloorIsRaisedOnSave()
+    {
+        var store = new RecordingStore();
+        var settings = new SettingsViewModel(store);
+        settings.ReturnValveSafetyMinimum = 50;
+        settings.PowerOnReturnValvePercent = 20;
+        for (int opening = 10; opening <= 100; opening += 10)
+            settings.SetCalibrationCurrent(opening, opening / 100.0);
+
+        Assert.True(await settings.SaveAsync());
+        Assert.Equal(50, settings.SavedConfiguration!.PowerOnReturnValvePercent);
+    }
+
     private sealed class RecordingStore : IHostConfigurationStore
     {
         public HostConfiguration? LoadResult { get; set; }

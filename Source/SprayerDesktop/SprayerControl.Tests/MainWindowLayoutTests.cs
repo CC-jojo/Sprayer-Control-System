@@ -274,6 +274,11 @@ public sealed class MainWindowLayoutTests
         Assert.Contains("TouchNumericKeypad", settings);
         Assert.Contains("PWM占空比下限", settings);
         Assert.Contains("回流阀安全下限", settings);
+        // 上电默认回流阀：开关 + 开度加减 + 继承上次开度的说明。
+        Assert.Contains("上电默认回流阀", settings);
+        Assert.Contains("PowerOnToggleButton", settings);
+        Assert.Contains("PowerOnOpeningValue", settings);
+        Assert.Contains("继承上次开度", settings);
         Assert.Contains("保存本地配置", settings);
         Assert.Contains("CurveCanvas", settings);
         Assert.Contains("MappedCurrentText", settings);

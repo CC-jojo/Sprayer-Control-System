@@ -15,6 +15,9 @@ public sealed class SettingsViewModel : ObservableObject
     private int _pwmDutyMaximum = 80;
     private int _returnValveSafetyMinimum = 10;
     private int? _lastDutyPercent;
+    private bool _powerOnReturnValveEnabled;
+    private int _powerOnReturnValvePercent = 100;
+    private double? _lastReturnOpeningPercent;
     private string _validationError = string.Empty;
     private HostConfiguration? _savedConfiguration;
 
@@ -58,6 +61,28 @@ public sealed class SettingsViewModel : ObservableObject
     {
         get => _lastDutyPercent;
         set => SetProperty(ref _lastDutyPercent, value);
+    }
+
+    /* 上电默认回流阀开关：打开时，控制器上电与上位机启动都把回流阀调到
+       PowerOnReturnValvePercent；关闭时改为继承 LastReturnOpeningPercent。默认关闭。 */
+    public bool PowerOnReturnValveEnabled
+    {
+        get => _powerOnReturnValveEnabled;
+        set => SetProperty(ref _powerOnReturnValveEnabled, value);
+    }
+
+    /* 上电默认回流阀开度：受安全下限约束（不低于下限、不高于 100）。 */
+    public int PowerOnReturnValvePercent
+    {
+        get => _powerOnReturnValvePercent;
+        set => SetProperty(ref _powerOnReturnValvePercent, value);
+    }
+
+    /* 回流阀开度记忆：程序退出时由主窗口写入，开关关闭时用于启动恢复。 */
+    public double? LastReturnOpeningPercent
+    {
+        get => _lastReturnOpeningPercent;
+        set => SetProperty(ref _lastReturnOpeningPercent, value);
     }
 
     public ReadOnlyObservableCollection<double?> CalibrationCurrents => _readOnlyCalibrationCurrents;
@@ -164,7 +189,10 @@ public sealed class SettingsViewModel : ObservableObject
                 returnValveCalibration: BuildCalibration(),
                 lastModifiedUtc: DateTimeOffset.UtcNow,
                 nozzleMapping: BuildNozzleMapping(),
-                lastDutyPercent: LastDutyPercent);
+                lastDutyPercent: LastDutyPercent,
+                powerOnReturnValveEnabled: PowerOnReturnValveEnabled,
+                powerOnReturnValvePercent: PowerOnReturnValvePercent,
+                lastReturnOpeningPercent: LastReturnOpeningPercent);
         }
         catch (Exception exception) when (HasValidationFailure(exception))
         {
@@ -211,6 +239,9 @@ public sealed class SettingsViewModel : ObservableObject
         PwmDutyMinimum = configuration.PwmDutyMinimum;
         ReturnValveSafetyMinimum = configuration.ReturnValveSafetyMinimum;
         LastDutyPercent = configuration.LastDutyPercent;
+        PowerOnReturnValveEnabled = configuration.PowerOnReturnValveEnabled;
+        PowerOnReturnValvePercent = configuration.PowerOnReturnValvePercent;
+        LastReturnOpeningPercent = configuration.LastReturnOpeningPercent;
         for (int index = 0; index < 10; index++)
             _calibrationCurrents[index] = configuration.ReturnValveCalibration.Points[index].CurrentMilliamps;
         _nozzleMappingEntries.Clear();

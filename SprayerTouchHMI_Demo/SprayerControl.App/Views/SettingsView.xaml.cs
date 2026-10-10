@@ -51,6 +51,8 @@ public partial class SettingsView : UserControl
         PwmValue.Text = $"{_viewModel.PwmDutyMinimum}%（上限 {_viewModel.PwmDutyMaximum}%）";
         SafetyValue.Text = $"{_draftSafetyMinimum}%{(_safetyConfirmed ? string.Empty : "（待确认）")}";
         ConfirmSafetyButton.IsEnabled = !_safetyConfirmed;
+        PowerOnOpeningValue.Text = $"{_viewModel.PowerOnReturnValvePercent}%";
+        PowerOnToggleButton.Content = _viewModel.PowerOnReturnValveEnabled ? "上电用此开度" : "继承上次开度";
         CalibrationGrid.Children.Clear();
         for (int opening = 10; opening <= 100; opening += 10)
         {
@@ -100,6 +102,28 @@ public partial class SettingsView : UserControl
     private void DecreaseSafety_Click(object sender, RoutedEventArgs e) { _draftSafetyMinimum = Math.Max(10, _draftSafetyMinimum - 1); _safetyConfirmed = _viewModel is not null && _draftSafetyMinimum == _viewModel.ReturnValveSafetyMinimum; Refresh(); }
     private void IncreaseSafety_Click(object sender, RoutedEventArgs e) { _draftSafetyMinimum = Math.Min(100, _draftSafetyMinimum + 1); _safetyConfirmed = _viewModel is not null && _draftSafetyMinimum == _viewModel.ReturnValveSafetyMinimum; Refresh(); }
     private void ConfirmSafety_Click(object sender, RoutedEventArgs e) { if (_viewModel is null) return; int oldValue = _viewModel.ReturnValveSafetyMinimum; _viewModel.ReturnValveSafetyMinimum = _draftSafetyMinimum; _safetyConfirmed = true; ResultText.Text = $"已确认安全下限修改：{oldValue}% → {_draftSafetyMinimum}%；触摸保存后生效。"; Refresh(); }
+
+    /* 上电默认回流阀：加减每按一次步进 1%，并钳制在安全下限与 100% 之间。 */
+    private void DecreasePowerOn_Click(object sender, RoutedEventArgs e) => AdjustPowerOnOpening(-1);
+    private void IncreasePowerOn_Click(object sender, RoutedEventArgs e) => AdjustPowerOnOpening(1);
+
+    private void AdjustPowerOnOpening(int delta)
+    {
+        if (_viewModel is null) return;
+        int floor = Math.Max(_viewModel.ReturnValveSafetyMinimum, _draftSafetyMinimum);
+        _viewModel.PowerOnReturnValvePercent = Math.Clamp(_viewModel.PowerOnReturnValvePercent + delta, floor, 100);
+        Refresh();
+    }
+
+    private void TogglePowerOn_Click(object sender, RoutedEventArgs e)
+    {
+        if (_viewModel is null) return;
+        _viewModel.PowerOnReturnValveEnabled = !_viewModel.PowerOnReturnValveEnabled;
+        ResultText.Text = _viewModel.PowerOnReturnValveEnabled
+            ? $"已打开上电默认回流阀：上电与打开上位机都会把回流阀调到 {_viewModel.PowerOnReturnValvePercent}%；触摸保存后生效。"
+            : "已关闭上电默认回流阀：上电与打开上位机将继承上次回流阀开度；触摸保存后生效。";
+        Refresh();
+    }
 
     private async void Save_Click(object sender, RoutedEventArgs e) => await SaveAndApplyAsync();
 

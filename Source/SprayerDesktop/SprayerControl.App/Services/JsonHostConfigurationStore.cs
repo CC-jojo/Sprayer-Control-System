@@ -110,7 +110,10 @@ public sealed class JsonHostConfigurationStore : IHostConfigurationStore
                 new ReturnValveCalibration(configuration.ReturnValveCalibration.Points),
                 configuration.LastModifiedUtc,
                 configuration.NozzleMapping,
-                configuration.LastDutyPercent);
+                configuration.LastDutyPercent,
+                configuration.PowerOnReturnValveEnabled,
+                configuration.PowerOnReturnValvePercent,
+                configuration.LastReturnOpeningPercent);
         }
         catch (Exception exception) when (exception is ArgumentException or InvalidOperationException)
         {

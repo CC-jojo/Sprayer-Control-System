@@ -162,4 +162,71 @@ public sealed class HostConfigurationTests
         Assert.Equal(30, configuration.ReturnValveSafetyMinimum);
         Assert.Equal(0.35, configuration.ReturnValveCalibration.CurrentMilliampsAt(35, configuration.ReturnValveSafetyMinimum), precision: 6);
     }
+
+    [Fact]
+    public void PowerOnReturnValveDefaultsToDisabledWithFullOpenSetpoint()
+    {
+        HostConfiguration configuration = new(
+            1, 30, 30,
+            new ReturnValveCalibration(ReturnValveCalibrationTests.ValidPoints()),
+            DateTimeOffset.UtcNow);
+
+        Assert.False(configuration.PowerOnReturnValveEnabled);
+        Assert.Equal(100, configuration.PowerOnReturnValvePercent);
+        Assert.Null(configuration.LastReturnOpeningPercent);
+    }
+
+    [Fact]
+    public void PowerOnReturnValveAndRememberedOpeningAreClampedToTheSafetyFloor()
+    {
+        // 安全下限 60%：低于下限的设定值与记忆值都抬到下限。
+        HostConfiguration configuration = new(
+            1, 30, 60,
+            new ReturnValveCalibration(ReturnValveCalibrationTests.ValidPoints()),
+            DateTimeOffset.UtcNow,
+            powerOnReturnValveEnabled: true,
+            powerOnReturnValvePercent: 40,
+            lastReturnOpeningPercent: 15);
+
+        Assert.True(configuration.PowerOnReturnValveEnabled);
+        Assert.Equal(60, configuration.PowerOnReturnValvePercent);
+        Assert.Equal(60d, configuration.LastReturnOpeningPercent!.Value);
+
+        // 超过 100% 的一律压回 100%。
+        HostConfiguration aboveMaximum = new(
+            1, 30, 30,
+            new ReturnValveCalibration(ReturnValveCalibrationTests.ValidPoints()),
+            DateTimeOffset.UtcNow,
+            powerOnReturnValvePercent: 130,
+            lastReturnOpeningPercent: 140);
+
+        Assert.Equal(100, aboveMaximum.PowerOnReturnValvePercent);
+        Assert.Equal(100d, aboveMaximum.LastReturnOpeningPercent!.Value);
+
+        Assert.Throws<ArgumentOutOfRangeException>(() =>
+            new HostConfiguration(
+                1, 30, 30,
+                new ReturnValveCalibration(ReturnValveCalibrationTests.ValidPoints()),
+                DateTimeOffset.UtcNow,
+                lastReturnOpeningPercent: double.NaN));
+    }
+
+    [Fact]
+    public void PowerOnReturnValveSettingsSurviveJsonRoundTrip()
+    {
+        HostConfiguration original = new(
+            1, 30, 20,
+            new ReturnValveCalibration(ReturnValveCalibrationTests.ValidPoints()),
+            DateTimeOffset.UtcNow,
+            powerOnReturnValveEnabled: true,
+            powerOnReturnValvePercent: 75,
+            lastReturnOpeningPercent: 42.5);
+
+        string json = JsonSerializer.Serialize(original);
+        HostConfiguration roundTripped = Assert.IsType<HostConfiguration>(JsonSerializer.Deserialize<HostConfiguration>(json));
+
+        Assert.True(roundTripped.PowerOnReturnValveEnabled);
+        Assert.Equal(75, roundTripped.PowerOnReturnValvePercent);
+        Assert.Equal(42.5d, roundTripped.LastReturnOpeningPercent!.Value);
+    }
 }
